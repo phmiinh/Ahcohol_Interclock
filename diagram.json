@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "author": "OpenAI",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": -10,
+      "left": -20,
+      "attrs": {}
+    },
+    {
+      "type": "board-ssd1306",
+      "id": "oled1",
+      "top": -170,
+      "left": 220,
+      "attrs": { "i2cAddress": "0x3c" }
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "servo1",
+      "top": 140,
+      "left": 260,
+      "attrs": { "horn": "single" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzz1",
+      "top": 120,
+      "left": 380,
+      "attrs": { "volume": "0.3" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledRed",
+      "top": -180,
+      "left": -170,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledGreen",
+      "top": -180,
+      "left": -110,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledYellow",
+      "top": -180,
+      "left": -50,
+      "attrs": { "color": "yellow" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "rRed",
+      "top": -120,
+      "left": -162,
+      "rotate": 90,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "rGreen",
+      "top": -120,
+      "left": -102,
+      "rotate": 90,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "rYellow",
+      "top": -120,
+      "left": -42,
+      "rotate": 90,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btnTest",
+      "top": 220,
+      "left": -170,
+      "rotate": 90,
+      "attrs": { "color": "green", "label": "TEST" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btnStart",
+      "top": 220,
+      "left": -80,
+      "rotate": 90,
+      "attrs": { "color": "red", "label": "START" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "mq3sim",
+      "top": 210,
+      "left": 190,
+      "rotate": 90,
+      "attrs": { "value": "150" }
+    }
+  ],
+  "connections": [
+    [ "oled1:GND", "esp:GND.1", "black", [ "h0" ] ],
+    [ "oled1:VCC", "esp:3V3", "red", [ "h0" ] ],
+    [ "oled1:SDA", "esp:D21", "green", [ "h0" ] ],
+    [ "oled1:SCL", "esp:D22", "blue", [ "h0" ] ],
+
+    [ "servo1:GND", "esp:GND.2", "black", [ "h0" ] ],
+    [ "servo1:V+", "esp:VIN", "red", [ "h0" ] ],
+    [ "servo1:PWM", "esp:D15", "orange", [ "h0" ] ],
+
+    [ "buzz1:1", "esp:GND.2", "black", [ "h0" ] ],
+    [ "buzz1:2", "esp:D13", "purple", [ "h0" ] ],
+
+    [ "ledRed:A", "rRed:1", "red", [ "v0" ] ],
+    [ "rRed:2", "esp:D25", "red", [ "v0" ] ],
+    [ "ledRed:C", "esp:GND.1", "black", [ "v0" ] ],
+
+    [ "ledGreen:A", "rGreen:1", "green", [ "v0" ] ],
+    [ "rGreen:2", "esp:D26", "green", [ "v0" ] ],
+    [ "ledGreen:C", "esp:GND.1", "black", [ "v0" ] ],
+
+    [ "ledYellow:A", "rYellow:1", "yellow", [ "v0" ] ],
+    [ "rYellow:2", "esp:D27", "yellow", [ "v0" ] ],
+    [ "ledYellow:C", "esp:GND.1", "black", [ "v0" ] ],
+
+    [ "btnTest:1.l", "esp:GND.1", "black", [ "v0" ] ],
+    [ "btnTest:2.l", "esp:D14", "green", [ "v0" ] ],
+
+    [ "btnStart:1.l", "esp:GND.1", "black", [ "v0" ] ],
+    [ "btnStart:2.l", "esp:D12", "red", [ "v0" ] ],
+
+    [ "mq3sim:GND", "esp:GND.2", "black", [ "v0" ] ],
+    [ "mq3sim:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "mq3sim:SIG", "esp:D34", "orange", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
