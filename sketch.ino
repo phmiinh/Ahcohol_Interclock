@@ -48,6 +48,15 @@ static const uint32_t UI_REFRESH_MS        = 200;
 static const uint32_t FAIL_BUZZER_PERIOD   = 500;
 static const uint32_t FAIL_BUZZER_ON_MS    = 220;
 
+// ---------- Button module config ----------
+// Default target is a 3-pin module: VCC, GND, OUT.
+// If your module drives OUT LOW when pressed, set BUTTON_ACTIVE_HIGH to false.
+static const bool     USE_3PIN_BUTTON_MODULES = true;
+static const bool     BUTTON_ACTIVE_HIGH      = true;
+static const uint8_t  BUTTON_PIN_MODE         = USE_3PIN_BUTTON_MODULES ? INPUT : INPUT_PULLUP;
+static const bool     BUTTON_ACTIVE_LEVEL     = BUTTON_ACTIVE_HIGH ? HIGH : LOW;
+static const bool     BUTTON_IDLE_LEVEL       = BUTTON_ACTIVE_HIGH ? LOW : HIGH;
+
 // ---------- States ----------
 enum SystemState {
   STATE_PREHEAT,
@@ -70,18 +79,36 @@ bool buzzerFailState = false;
 // ---------- Button tracking ----------
 struct ButtonTracker {
   int pin;
+  bool activeLevel;
   bool lastStable;
   bool lastRead;
   uint32_t lastChangeMs;
 
-  ButtonTracker(int buttonPin, bool stableState = HIGH, bool readState = HIGH, uint32_t changedAtMs = 0)
-    : pin(buttonPin), lastStable(stableState), lastRead(readState), lastChangeMs(changedAtMs) {}
+  ButtonTracker(
+    int buttonPin,
+    bool pressedState = BUTTON_ACTIVE_LEVEL,
+    bool stableState = BUTTON_IDLE_LEVEL,
+    bool readState = BUTTON_IDLE_LEVEL,
+    uint32_t changedAtMs = 0)
+    : pin(buttonPin),
+      activeLevel(pressedState),
+      lastStable(stableState),
+      lastRead(readState),
+      lastChangeMs(changedAtMs) {}
 };
 
 ButtonTracker btnTest(PIN_BTN_TEST);
 ButtonTracker btnStart(PIN_BTN_START);
 
 // ---------- Helpers ----------
+void initButton(ButtonTracker &btn) {
+  pinMode(btn.pin, BUTTON_PIN_MODE);
+  bool reading = digitalRead(btn.pin);
+  btn.lastStable = reading;
+  btn.lastRead = reading;
+  btn.lastChangeMs = millis();
+}
+
 void setRelay(bool enabled) {
   if (ENABLE_RELAY_OUTPUT) {
     digitalWrite(PIN_RELAY, enabled ? HIGH : LOW);
@@ -263,7 +290,7 @@ bool buttonPressed(ButtonTracker &btn) {
 
   if ((millis() - btn.lastChangeMs) > BUTTON_DEBOUNCE_MS && reading != btn.lastStable) {
     btn.lastStable = reading;
-    if (btn.lastStable == LOW) {
+    if (btn.lastStable == btn.activeLevel) {
       return true;
     }
   }
@@ -370,13 +397,15 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println("Booting Alcohol Interlock...");
+  Serial.println(USE_3PIN_BUTTON_MODULES ? "Buttons: 3-pin module mode" : "Buttons: direct pushbutton mode");
+  Serial.println(BUTTON_ACTIVE_HIGH ? "Button polarity: active HIGH" : "Button polarity: active LOW");
 
   pinMode(PIN_LED_RED, OUTPUT);
   pinMode(PIN_LED_GREEN, OUTPUT);
   pinMode(PIN_LED_YELLOW, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_BTN_TEST, INPUT_PULLUP);
-  pinMode(PIN_BTN_START, INPUT_PULLUP);
+  initButton(btnTest);
+  initButton(btnStart);
 
   if (ENABLE_RELAY_OUTPUT) {
     pinMode(PIN_RELAY, OUTPUT);

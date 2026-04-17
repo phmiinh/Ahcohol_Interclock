@@ -153,6 +153,14 @@ Nếu chuyển sang phần cứng thật, cần làm thêm:
 - hiệu chuẩn lại ngưỡng `ALCOHOL_THRESHOLD`
 - cân nhắc dùng `relay` để khóa/ngắt động cơ
 - kiểm tra nguồn cấp cho `servo`, `OLED`, `MQ3`
+- nối `OUT` của module `TEST` vào `GPIO14`
+- nối `OUT` của module `START` vào `GPIO12`
+- nối `VCC` của 2 module nút vào `3V3`
+- nối `GND` của 2 module nút vào `GND`
+
+Lưu ý về logic nút:
+- firmware hiện mặc định hiểu `nhấn nút = OUT lên HIGH`
+- nếu module của bạn xuất `LOW` khi nhấn, đổi `BUTTON_ACTIVE_HIGH` trong `sketch.ino` thành `false`
 
 ## 11. Tóm tắt thao tác ngắn nhất
 

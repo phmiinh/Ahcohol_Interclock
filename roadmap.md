@@ -35,8 +35,8 @@ Mạch mô phỏng trong `diagram.json` hiện gồm:
 - `LED đỏ`
 - `LED xanh lá`
 - `LED vàng`
-- `Nút TEST`
-- `Nút START`
+- `Module TEST 3 chân` (`VCC`, `GND`, `OUT`)
+- `Module START 3 chân` (`VCC`, `GND`, `OUT`)
 - `Biến trở` đóng vai trò mô phỏng đầu ra analog của `MQ3`
 
 ## 4. Chức năng hiện đã có
@@ -149,13 +149,15 @@ Các chân quan trọng:
 - `LED đỏ` -> `GPIO25`
 - `LED xanh` -> `GPIO26`
 - `LED vàng` -> `GPIO27`
-- `Nút TEST` -> `GPIO14`
-- `Nút START` -> `GPIO12`
+- `OUT TEST` -> `GPIO14`
+- `OUT START` -> `GPIO12`
 - `OLED SDA` -> `GPIO21`
 - `OLED SCL` -> `GPIO22`
 
 Lưu ý:
 - Trong mô phỏng, `MQ3` đang được thay bằng `potentiometer`
+- Hai nút `TEST/START` hiện đã được quy đổi sang logic module `3 chân`
+- Mặc định firmware đang giả định `OUT = HIGH` khi nhấn
 
 ## 12. Các file quan trọng nhất
 
