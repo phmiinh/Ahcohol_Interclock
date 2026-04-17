@@ -150,7 +150,7 @@ Các chân quan trọng:
 - `LED xanh` -> `GPIO26`
 - `LED vàng` -> `GPIO27`
 - `OUT TEST` -> `GPIO14`
-- `OUT START` -> `GPIO12`
+- `OUT START` -> `GPIO16`
 - `OLED SDA` -> `GPIO21`
 - `OLED SCL` -> `GPIO22`
 

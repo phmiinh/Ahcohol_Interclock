@@ -82,7 +82,7 @@
       "top": 220,
       "left": -170,
       "rotate": 90,
-      "attrs": { "color": "green", "label": "TEST" }
+      "attrs": { "color": "green", "label": "TEST-OUT" }
     },
     {
       "type": "wokwi-pushbutton",
@@ -90,7 +90,7 @@
       "top": 220,
       "left": -80,
       "rotate": 90,
-      "attrs": { "color": "red", "label": "START" }
+      "attrs": { "color": "red", "label": "START-OUT" }
     },
     {
       "type": "wokwi-resistor",
@@ -148,8 +148,8 @@
     [ "rBtnTest:2", "esp:GND.1", "black", [ "v0" ] ],
 
     [ "btnStart:1.l", "esp:3V3", "red", [ "v0" ] ],
-    [ "btnStart:2.l", "esp:D12", "red", [ "v0" ] ],
-    [ "rBtnStart:1", "esp:D12", "red", [ "v0" ] ],
+    [ "btnStart:2.l", "esp:D16", "red", [ "v0" ] ],
+    [ "rBtnStart:1", "esp:D16", "red", [ "v0" ] ],
     [ "rBtnStart:2", "esp:GND.1", "black", [ "v0" ] ],
 
     [ "mq3sim:GND", "esp:GND.2", "black", [ "v0" ] ],

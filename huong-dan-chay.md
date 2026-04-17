@@ -154,7 +154,7 @@ Nếu chuyển sang phần cứng thật, cần làm thêm:
 - cân nhắc dùng `relay` để khóa/ngắt động cơ
 - kiểm tra nguồn cấp cho `servo`, `OLED`, `MQ3`
 - nối `OUT` của module `TEST` vào `GPIO14`
-- nối `OUT` của module `START` vào `GPIO12`
+- nối `OUT` của module `START` vào `GPIO16`
 - nối `VCC` của 2 module nút vào `3V3`
 - nối `GND` của 2 module nút vào `GND`
 

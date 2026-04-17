@@ -20,7 +20,7 @@ static const int PIN_LED_RED    = 25;
 static const int PIN_LED_GREEN  = 26;
 static const int PIN_LED_YELLOW = 27;
 static const int PIN_BTN_TEST   = 14;
-static const int PIN_BTN_START  = 12;
+static const int PIN_BTN_START  = 16;
 
 // Relay là tùy chọn mở rộng nếu bạn muốn mô phỏng ngắt/mở động cơ bằng relay
 static const bool ENABLE_RELAY_OUTPUT = false;
