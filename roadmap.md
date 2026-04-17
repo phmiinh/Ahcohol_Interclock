@@ -216,3 +216,27 @@ Giai đoạn setup hiện tại được xem là hoàn thành khi:
 - Wokwi trong `VS Code` nạp được firmware local
 - demo được cả 2 nhánh `PASS` và `FAIL`
 - tài liệu này tiếp tục được giữ đồng bộ với codebase thực tế
+
+## 17. Dashboard realtime
+
+Ngoài mô phỏng embedded, project hiện đã có thêm lớp giám sát realtime cục bộ:
+
+- `ESP32 -> Serial USB -> Node.js backend -> Web dashboard`
+
+Mục tiêu của lớp này:
+- hiển thị trạng thái hệ thống theo thời gian thực
+- hiển thị `Live ADC`, ngưỡng và kết quả đo
+- lưu sự kiện `PASS / FAIL / RUNNING / lỗi kết nối`
+- gửi thông báo trình duyệt khi có kết quả hoặc phát hiện vấn đề
+
+Các file liên quan:
+- `package.json`
+- `dashboard/server.js`
+- `dashboard/public/index.html`
+- `dashboard/public/styles.css`
+- `dashboard/public/app.js`
+- `huong-dan-dashboard.md`
+
+Ghi chú:
+- dashboard hiện tối ưu cho `ESP32 thật` kết nối qua `USB serial`
+- vẫn có `mock mode` để test UI khi chưa cắm board

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alcohol Interlock Realtime Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Realtime Monitoring</p>
+          <h1>Alcohol Interlock Control Room</h1>
+          <p class="hero-copy">
+            Theo dõi ADC, trạng thái khóa xe, kết quả PASS/FAIL và nhận cảnh báo ngay khi hệ thống phát hiện vi phạm
+            hoặc mất kết nối.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="notificationsBtn" class="outline-btn">Bật thông báo</button>
+          <button id="notifyTestBtn" class="ghost-btn">Test thông báo</button>
+        </div>
+      </header>
+
+      <section class="status-bar">
+        <div class="status-chip" id="connectionChip">Đang khởi tạo</div>
+        <div class="status-meta">
+          <span id="modeLabel">Mode: --</span>
+          <span id="portLabel">Port: --</span>
+          <span id="updatedLabel">Cập nhật: --</span>
+        </div>
+      </section>
+
+      <main class="dashboard-grid">
+        <section class="panel primary-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Live Sensor</p>
+              <h2>ADC realtime</h2>
+            </div>
+            <div class="risk-pill" id="riskPill">SAFE</div>
+          </div>
+
+          <div class="metric-row">
+            <div class="metric-card">
+              <span class="metric-label">Live ADC</span>
+              <strong class="metric-value" id="liveAdcValue">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Ngưỡng</span>
+              <strong class="metric-value" id="thresholdValue">2000</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Mẫu cuối</span>
+              <strong class="metric-value" id="sampledAdcValue">0</strong>
+            </div>
+          </div>
+
+          <div class="gauge-block">
+            <div class="gauge-track">
+              <div class="gauge-fill" id="gaugeFill"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>0</span>
+              <span id="percentLabel">0%</span>
+              <span>4095</span>
+            </div>
+          </div>
+
+          <canvas id="historyChart" width="920" height="240"></canvas>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Device State</p>
+              <h2>Tình trạng hệ thống</h2>
+            </div>
+          </div>
+
+          <div class="state-stack">
+            <div class="big-state" id="stateValue">DISCONNECTED</div>
+            <div class="state-description" id="stateDescription">Chưa có telemetry từ ESP32.</div>
+          </div>
+
+          <div class="compact-grid">
+            <article class="compact-card">
+              <span>Kết quả</span>
+              <strong id="resultValue">--</strong>
+            </article>
+            <article class="compact-card">
+              <span>Servo</span>
+              <strong id="servoValue">0°</strong>
+            </article>
+            <article class="compact-card">
+              <span>Khóa xe</span>
+              <strong id="lockValue">Đang khóa</strong>
+            </article>
+            <article class="compact-card">
+              <span>Buzzer</span>
+              <strong id="buzzerValue">OFF</strong>
+            </article>
+            <article class="compact-card">
+              <span>START</span>
+              <strong id="startValue">Chưa cho phép</strong>
+            </article>
+            <article class="compact-card">
+              <span>Preheat còn</span>
+              <strong id="preheatValue">0s</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel events-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Notifications</p>
+              <h2>Sự kiện gần nhất</h2>
+            </div>
+          </div>
+          <ul id="eventsList" class="events-list"></ul>
+        </section>
+
+        <section class="panel raw-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Serial Mirror</p>
+              <h2>Dòng serial gần nhất</h2>
+            </div>
+          </div>
+          <pre id="rawLines" class="raw-console"></pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "alcohol-interlock-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realtime dashboard for the Alcohol Interlock ESP32 prototype",
+  "scripts": {
+    "start": "node dashboard/server.js",
+    "mock": "node dashboard/server.js --mock",
+    "ports": "node dashboard/server.js --list-ports"
+  },
+  "dependencies": {
+    "@serialport/parser-readline": "^12.0.0",
+    "express": "^4.21.2",
+    "serialport": "^12.0.0",
+    "socket.io": "^4.8.1"
+  }
+}

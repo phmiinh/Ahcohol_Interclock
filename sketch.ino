@@ -47,6 +47,10 @@ static const uint32_t BUTTON_DEBOUNCE_MS   = 60;
 static const uint32_t UI_REFRESH_MS        = 200;
 static const uint32_t FAIL_BUZZER_PERIOD   = 500;
 static const uint32_t FAIL_BUZZER_ON_MS    = 220;
+static const bool     ENABLE_SENSOR_DEBUG  = true;
+static const uint32_t SENSOR_DEBUG_MS      = 400;
+static const bool     ENABLE_DASHBOARD_PROTOCOL = true;
+static const uint32_t DASHBOARD_TELEMETRY_MS    = 500;
 
 // ---------- Button module config ----------
 // Default target is a 3-pin module: VCC, GND, OUT.
@@ -71,10 +75,15 @@ SystemState state = STATE_PREHEAT;
 uint32_t preheatStartMs = 0;
 uint32_t lastUiRefreshMs = 0;
 uint32_t lastFailBuzzerToggleMs = 0;
+uint32_t lastSensorDebugMs = 0;
+uint32_t lastDashboardTelemetryMs = 0;
 
 uint16_t lastAlcoholRaw = 0;
 uint16_t sampledAlcoholRaw = 0;
 bool buzzerFailState = false;
+bool buzzerOutputState = false;
+bool vehicleLocked = true;
+int currentServoAngle = SERVO_LOCK_ANGLE;
 
 // ---------- Button tracking ----------
 struct ButtonTracker {
@@ -116,15 +125,20 @@ void setRelay(bool enabled) {
 }
 
 void setBuzzer(bool on) {
+  buzzerOutputState = on;
   digitalWrite(PIN_BUZZER, on ? HIGH : LOW);
 }
 
 void lockVehicle() {
+  vehicleLocked = true;
+  currentServoAngle = SERVO_LOCK_ANGLE;
   lockServo.write(SERVO_LOCK_ANGLE);
   setRelay(false);
 }
 
 void unlockVehicle() {
+  vehicleLocked = false;
+  currentServoAngle = SERVO_UNLOCK_ANGLE;
   lockServo.write(SERVO_UNLOCK_ANGLE);
   setRelay(true);
 }
@@ -139,6 +153,68 @@ uint16_t readAlcoholRaw() {
 
 float rawToPercent(uint16_t raw) {
   return (raw / 4095.0f) * 100.0f;
+}
+
+const char* stateToString(SystemState currentState) {
+  switch (currentState) {
+    case STATE_PREHEAT:
+      return "PREHEAT";
+    case STATE_STANDBY_LOCKED:
+      return "STANDBY_LOCKED";
+    case STATE_SAMPLING:
+      return "SAMPLING";
+    case STATE_PASS_READY:
+      return "PASS_READY";
+    case STATE_FAIL_LOCKED:
+      return "FAIL_LOCKED";
+    case STATE_RUNNING:
+      return "RUNNING";
+  }
+
+  return "UNKNOWN";
+}
+
+const char* resultToString() {
+  switch (state) {
+    case STATE_PASS_READY:
+    case STATE_RUNNING:
+      return "PASS";
+    case STATE_FAIL_LOCKED:
+      return "FAIL";
+    default:
+      return "PENDING";
+  }
+}
+
+const char* stateSeverity(SystemState currentState) {
+  switch (currentState) {
+    case STATE_PASS_READY:
+    case STATE_RUNNING:
+      return "success";
+    case STATE_FAIL_LOCKED:
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
+const char* stateMessage(SystemState currentState) {
+  switch (currentState) {
+    case STATE_PREHEAT:
+      return "Sensor preheat in progress";
+    case STATE_STANDBY_LOCKED:
+      return "Vehicle locked and waiting for TEST";
+    case STATE_SAMPLING:
+      return "Sampling alcohol level";
+    case STATE_PASS_READY:
+      return "Alcohol level safe. START enabled";
+    case STATE_FAIL_LOCKED:
+      return "Alcohol level above threshold. Vehicle locked";
+    case STATE_RUNNING:
+      return "Vehicle unlocked and running";
+  }
+
+  return "Unknown system state";
 }
 
 void clearLeds() {
@@ -197,6 +273,113 @@ void drawCenteredText(const String& line1, const String& line2 = "", const Strin
   display.display();
 }
 
+void drawLiveAlcoholLine(int y, const char* label = "Live ADC: ") {
+  display.setCursor(0, y);
+  display.print(label);
+  display.print(lastAlcoholRaw);
+}
+
+void printLiveSensorDebug() {
+  if (!ENABLE_SENSOR_DEBUG) {
+    return;
+  }
+
+  uint32_t now = millis();
+  if (now - lastSensorDebugMs < SENSOR_DEBUG_MS) {
+    return;
+  }
+
+  lastSensorDebugMs = now;
+  Serial.print("LIVE ADC=");
+  Serial.print(lastAlcoholRaw);
+  Serial.print(" THRESH=");
+  Serial.print(ALCOHOL_THRESHOLD);
+  Serial.print(" STATUS=");
+  Serial.println(lastAlcoholRaw < ALCOHOL_THRESHOLD ? "SAFE" : "HIGH");
+}
+
+void emitDashboardEvent(const char* eventName, const char* severity, const char* message) {
+  if (!ENABLE_DASHBOARD_PROTOCOL) {
+    return;
+  }
+
+  Serial.print("AI_JSON {\"type\":\"event\",\"event\":\"");
+  Serial.print(eventName);
+  Serial.print("\",\"severity\":\"");
+  Serial.print(severity);
+  Serial.print("\",\"message\":\"");
+  Serial.print(message);
+  Serial.print("\",\"state\":\"");
+  Serial.print(stateToString(state));
+  Serial.print("\",\"liveAdc\":");
+  Serial.print(lastAlcoholRaw);
+  Serial.print(",\"sampledAdc\":");
+  Serial.print(sampledAlcoholRaw);
+  Serial.print(",\"threshold\":");
+  Serial.print(ALCOHOL_THRESHOLD);
+  Serial.print(",\"vehicleLocked\":");
+  Serial.print(vehicleLocked ? "true" : "false");
+  Serial.print(",\"buzzerOn\":");
+  Serial.print(buzzerOutputState ? "true" : "false");
+  Serial.print(",\"servoAngle\":");
+  Serial.print(currentServoAngle);
+  Serial.print(",\"uptimeMs\":");
+  Serial.print(millis());
+  Serial.println("}");
+}
+
+void emitDashboardTelemetry(bool force = false) {
+  if (!ENABLE_DASHBOARD_PROTOCOL) {
+    return;
+  }
+
+  uint32_t now = millis();
+  if (!force && now - lastDashboardTelemetryMs < DASHBOARD_TELEMETRY_MS) {
+    return;
+  }
+
+  lastDashboardTelemetryMs = now;
+
+  uint32_t preheatRemainingMs = 0;
+  if (state == STATE_PREHEAT && now > preheatStartMs && PREHEAT_MS > (now - preheatStartMs)) {
+    preheatRemainingMs = PREHEAT_MS - (now - preheatStartMs);
+  }
+
+  Serial.print("AI_JSON {\"type\":\"telemetry\",\"state\":\"");
+  Serial.print(stateToString(state));
+  Serial.print("\",\"result\":\"");
+  Serial.print(resultToString());
+  Serial.print("\",\"liveAdc\":");
+  Serial.print(lastAlcoholRaw);
+  Serial.print(",\"sampledAdc\":");
+  Serial.print(sampledAlcoholRaw);
+  Serial.print(",\"threshold\":");
+  Serial.print(ALCOHOL_THRESHOLD);
+  Serial.print(",\"percent\":");
+  Serial.print(rawToPercent(lastAlcoholRaw), 1);
+  Serial.print(",\"samplePercent\":");
+  Serial.print(rawToPercent(sampledAlcoholRaw), 1);
+  Serial.print(",\"preheatRemainingMs\":");
+  Serial.print(preheatRemainingMs);
+  Serial.print(",\"demoMode\":");
+  Serial.print(DEMO_MODE ? "true" : "false");
+  Serial.print(",\"canStart\":");
+  Serial.print(state == STATE_PASS_READY ? "true" : "false");
+  Serial.print(",\"vehicleLocked\":");
+  Serial.print(vehicleLocked ? "true" : "false");
+  Serial.print(",\"buzzerOn\":");
+  Serial.print(buzzerOutputState ? "true" : "false");
+  Serial.print(",\"servoAngle\":");
+  Serial.print(currentServoAngle);
+  Serial.print(",\"buttonMode\":\"");
+  Serial.print(USE_3PIN_BUTTON_MODULES ? "module_3pin" : "pushbutton");
+  Serial.print("\",\"buttonActiveHigh\":");
+  Serial.print(BUTTON_ACTIVE_HIGH ? "true" : "false");
+  Serial.print(",\"uptimeMs\":");
+  Serial.print(now);
+  Serial.println("}");
+}
+
 void drawStatusScreen() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -215,18 +398,21 @@ void drawStatusScreen() {
       display.print("Con lai: ");
       display.print(remainingSec);
       display.println("s");
-      display.setCursor(0, 46);
-      display.println("LED vang dang sang");
+      drawLiveAlcoholLine(40);
+      display.setCursor(0, 52);
+      display.println("Cho preheat xong");
       break;
     }
 
     case STATE_STANDBY_LOCKED:
       display.setCursor(0, 16);
       display.println("San sang kiem tra");
-      display.setCursor(0, 28);
-      display.println("Nhan TEST de do con");
-      display.setCursor(0, 46);
-      display.println("Dong co dang khoa");
+      drawLiveAlcoholLine(28);
+      display.setCursor(0, 40);
+      display.print("Dat neu < ");
+      display.print(ALCOHOL_THRESHOLD);
+      display.setCursor(0, 52);
+      display.println("Nhan TEST de do");
       break;
 
     case STATE_SAMPLING:
@@ -234,7 +420,8 @@ void drawStatusScreen() {
       display.println("Dang lay mau hoi tho");
       display.setCursor(0, 28);
       display.println("Vui long cho 1 giay");
-      display.setCursor(0, 46);
+      drawLiveAlcoholLine(40);
+      display.setCursor(0, 52);
       display.println("Dang phan tich...");
       break;
 
@@ -242,27 +429,22 @@ void drawStatusScreen() {
       display.setCursor(0, 16);
       display.println("KET QUA: AN TOAN");
       display.setCursor(0, 28);
-      display.print("ADC: ");
+      display.print("Mau: ");
       display.print(sampledAlcoholRaw);
-      display.setCursor(0, 40);
-      display.print("Muc demo: ");
-      display.print(rawToPercent(sampledAlcoholRaw), 1);
-      display.println("%");
+      drawLiveAlcoholLine(40);
       display.setCursor(0, 52);
-      display.println("Nhan START de mo khoa");
+      display.println("Nhan START de mo");
       break;
 
     case STATE_FAIL_LOCKED:
       display.setCursor(0, 16);
       display.println("KET QUA: VI PHAM");
       display.setCursor(0, 28);
-      display.print("ADC: ");
+      display.print("Mau: ");
       display.print(sampledAlcoholRaw);
-      display.setCursor(0, 40);
-      display.print("Nguong: ");
-      display.print(ALCOHOL_THRESHOLD);
+      drawLiveAlcoholLine(40);
       display.setCursor(0, 52);
-      display.println("TEST lai de thu lai");
+      display.println("Chinh lai roi TEST");
       break;
 
     case STATE_RUNNING:
@@ -270,8 +452,7 @@ void drawStatusScreen() {
       display.println("XE DANG CHAY");
       display.setCursor(0, 28);
       display.println("Servo mo khoa");
-      display.setCursor(0, 40);
-      display.println("TEST bi vo hieu hoa");
+      drawLiveAlcoholLine(40);
       display.setCursor(0, 52);
       display.println("Nhan START de dung");
       break;
@@ -356,6 +537,8 @@ void transitionTo(SystemState newState) {
   }
 
   drawStatusScreen();
+  emitDashboardEvent("state_changed", stateSeverity(state), stateMessage(state));
+  emitDashboardTelemetry(true);
 }
 
 void handlePreheat() {
@@ -380,9 +563,11 @@ void handleSampling() {
   if (sampledAlcoholRaw < ALCOHOL_THRESHOLD) {
     Serial.println("=> PASS - CHO PHEP KHOI DONG");
     transitionTo(STATE_PASS_READY);
+    emitDashboardEvent("sample_result", "success", "Alcohol level safe");
   } else {
     Serial.println("=> FAIL - KHOA DONG CO");
     transitionTo(STATE_FAIL_LOCKED);
+    emitDashboardEvent("sample_result", "warning", "Alcohol level above threshold");
   }
 }
 
@@ -432,6 +617,8 @@ void setup() {
 
   preheatStartMs = millis();
   transitionTo(STATE_PREHEAT);
+  emitDashboardEvent("boot", "info", "Device booted");
+  emitDashboardTelemetry(true);
 }
 
 void loop() {
@@ -439,6 +626,8 @@ void loop() {
   bool startPressed = buttonPressed(btnStart);
 
   lastAlcoholRaw = readAlcoholRaw();
+  printLiveSensorDebug();
+  emitDashboardTelemetry();
 
   switch (state) {
     case STATE_PREHEAT:
