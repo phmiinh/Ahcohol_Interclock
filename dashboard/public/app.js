@@ -197,14 +197,19 @@ function describeState(telemetry) {
     SAMPLING: "ESP32 đang lấy nhiều mẫu ADC để tính trung bình và giảm nhiễu.",
     PASS_READY: "Kết quả an toàn. Người dùng có thể nhấn START để mở khóa.",
     FAIL_LOCKED: "Phát hiện vượt ngưỡng. Xe tiếp tục bị khóa và còi cảnh báo có thể đang bật.",
-    RUNNING: "Servo đã mở khóa và demo đang ở trạng thái vận hành."
+    RUNNING: "Servo đã mở khóa và demo đang ở trạng thái vận hành.",
+    ERROR_LOCKED: "Hệ thống phát hiện lỗi phần cứng hoặc dữ liệu ADC bất thường và đã quay về safe state."
   };
 
   return map[telemetry.state] || "Chưa có mô tả trạng thái.";
 }
 
 function computeRiskLabel(telemetry) {
-  if ((telemetry.result || "").toUpperCase() === "FAIL" || telemetry.liveAdc >= telemetry.threshold) {
+  if (
+    (telemetry.result || "").toUpperCase() === "FAIL" ||
+    telemetry.state === "ERROR_LOCKED" ||
+    telemetry.liveAdc >= telemetry.threshold
+  ) {
     return "HIGH";
   }
   if ((telemetry.result || "").toUpperCase() === "PASS") {

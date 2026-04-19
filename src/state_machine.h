@@ -1,0 +1,56 @@
+#pragma once
+
+#include "io_devices.h"
+#include "telemetry.h"
+#include "ui_oled.h"
+
+namespace app {
+
+class AlcoholInterlockController {
+ public:
+  void begin();
+  void update();
+
+ private:
+  struct PassBeep {
+    bool active = false;
+    uint32_t startedAtMs = 0;
+    uint16_t durationMs = 0;
+  };
+
+  struct SamplingSession {
+    bool active = false;
+    uint8_t collected = 0;
+    uint32_t sum = 0;
+    uint32_t startedAtMs = 0;
+    uint32_t completedAtMs = 0;
+    uint32_t nextSampleAtMs = 0;
+    uint16_t lastRaw = 0;
+  };
+
+  void transitionTo(SystemState newState);
+  void enterFault(FaultCode fault, const char* message);
+  bool refreshLiveAdc();
+  void updatePreheat(uint32_t nowMs);
+  void startSampling(uint32_t nowMs);
+  void updateSampling(uint32_t nowMs);
+  void finalizeSampling(uint32_t nowMs);
+  void updatePassBeep(uint32_t nowMs);
+  void updateFailBuzzer(uint32_t nowMs);
+  void updateUi(uint32_t nowMs, bool force = false);
+  AppSnapshot snapshot(uint32_t nowMs) const;
+
+  IoDevices io_;
+  OledUi ui_;
+  Telemetry telemetry_;
+  SystemState state_ = SystemState::Preheat;
+  FaultCode fault_ = FaultCode::None;
+  uint32_t preheatStartedAtMs_ = 0;
+  uint32_t lastUiRefreshMs_ = 0;
+  uint16_t lastAlcoholRaw_ = 0;
+  uint16_t sampledAlcoholRaw_ = 0;
+  PassBeep passBeep_;
+  SamplingSession sampling_;
+};
+
+}  // namespace app
