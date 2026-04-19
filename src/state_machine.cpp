@@ -1,6 +1,24 @@
 #include "state_machine.h"
 
+#include <math.h>
+
 namespace app {
+namespace {
+
+const char* sensorWarningMessage(SensorWarning warning) {
+  switch (warning) {
+    case SensorWarning::SaturatedLow:
+      return "ADC stays near 0 for too long. Check sensor path or input bias.";
+    case SensorWarning::SaturatedHigh:
+      return "ADC stays near 4095 for too long. Check MQ3 simulation or sensor saturation.";
+    case SensorWarning::None:
+      return "Sensor operating in normal ADC range.";
+  }
+
+  return "Unknown sensor status.";
+}
+
+}  // namespace
 
 void AlcoholInterlockController::begin() {
   telemetry_.begin();
@@ -24,9 +42,10 @@ void AlcoholInterlockController::begin() {
 void AlcoholInterlockController::update() {
   const uint32_t nowMs = millis();
 
-  if (fault_ == FaultCode::None && !refreshLiveAdc()) {
+  if (fault_ == FaultCode::None) {
+    refreshLiveAdc(nowMs);
+  } else {
     updateUi(nowMs, true);
-    return;
   }
 
   const AppSnapshot liveSnapshot = snapshot(nowMs);
@@ -54,8 +73,14 @@ void AlcoholInterlockController::update() {
 
     case SystemState::PassReady:
       if (startPressed) {
+        const uint32_t startPressedAtMs = nowMs;
+        lastPassReadyToUnlockMs_ = passReadyEnteredAtMs_ > 0 ? (startPressedAtMs - passReadyEnteredAtMs_) : 0;
         telemetry_.logAction("START accepted. Vehicle unlocked");
         transitionTo(SystemState::Running);
+        lastStartToUnlockMs_ = millis() - startPressedAtMs;
+        const AppSnapshot runningSnapshot = snapshot(millis());
+        telemetry_.logStartUnlockMetrics(runningSnapshot);
+        telemetry_.emitDashboardEvent("start_unlocked", "success", "START accepted. Servo unlocked", runningSnapshot);
       } else if (testPressed) {
         telemetry_.logAction("TEST pressed. Re-sampling");
         startSampling(nowMs);
@@ -91,11 +116,18 @@ void AlcoholInterlockController::update() {
 }
 
 void AlcoholInterlockController::transitionTo(SystemState newState) {
+  const uint32_t transitionStartedAtMs = millis();
   state_ = newState;
   passBeep_ = {};
 
   if (state_ != SystemState::Sampling) {
     sampling_.active = false;
+  }
+
+  if (state_ == SystemState::PassReady) {
+    passReadyEnteredAtMs_ = transitionStartedAtMs;
+  } else if (state_ != SystemState::Running) {
+    passReadyEnteredAtMs_ = 0;
   }
 
   switch (state_) {
@@ -127,12 +159,12 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
 
   if (state_ == SystemState::PassReady) {
     passBeep_.active = true;
-    passBeep_.startedAtMs = millis();
+    passBeep_.startedAtMs = transitionStartedAtMs;
     passBeep_.durationMs = config::timing::kPassBeepMs;
     io_.setBuzzer(true);
   }
 
-  const AppSnapshot current = snapshot(millis());
+  const AppSnapshot current = snapshot(transitionStartedAtMs);
   telemetry_.logStateChange(current);
   telemetry_.emitDashboardEvent("state_changed", stateSeverity(state_), stateMessage(state_), current);
   telemetry_.emitDashboardTelemetry(current, true);
@@ -149,15 +181,50 @@ void AlcoholInterlockController::enterFault(FaultCode fault, const char* message
   telemetry_.emitDashboardTelemetry(snapshot(millis()), true);
 }
 
-bool AlcoholInterlockController::refreshLiveAdc() {
-  uint16_t raw = 0;
-  if (!io_.readAlcoholRaw(raw)) {
-    enterFault(FaultCode::AdcReadInvalid, "ADC returned invalid data. System locked");
-    return false;
+void AlcoholInterlockController::refreshLiveAdc(uint32_t nowMs) {
+  lastAlcoholRaw_ = io_.readAlcoholRaw();
+  updateSensorHealth(nowMs);
+}
+
+void AlcoholInterlockController::updateSensorHealth(uint32_t nowMs) {
+  SensorWarning candidate = SensorWarning::None;
+  if (lastAlcoholRaw_ <= config::thresholds::kRailLowAdc) {
+    candidate = SensorWarning::SaturatedLow;
+  } else if (lastAlcoholRaw_ >= config::thresholds::kRailHighAdc) {
+    candidate = SensorWarning::SaturatedHigh;
   }
 
-  lastAlcoholRaw_ = raw;
-  return true;
+  if (candidate != sensorCandidateWarning_) {
+    sensorCandidateWarning_ = candidate;
+    sensorCandidateStartedAtMs_ = nowMs;
+  }
+
+  if (candidate == SensorWarning::None) {
+    if (sensorWarning_ != SensorWarning::None) {
+      sensorWarning_ = SensorWarning::None;
+      sensorWarningSinceMs_ = 0;
+      telemetry_.logSensorRecovered(lastAlcoholRaw_);
+      telemetry_.emitDashboardEvent(
+          "sensor_warning_cleared",
+          "info",
+          "ADC returned to normal operating range.",
+          snapshot(nowMs));
+    }
+    return;
+  }
+
+  if (nowMs - sensorCandidateStartedAtMs_ < config::timing::kSensorRailWarnMs) {
+    return;
+  }
+
+  if (sensorWarning_ == candidate) {
+    return;
+  }
+
+  sensorWarning_ = candidate;
+  sensorWarningSinceMs_ = sensorCandidateStartedAtMs_;
+  telemetry_.logSensorWarning(sensorWarning_, lastAlcoholRaw_, nowMs - sensorCandidateStartedAtMs_);
+  telemetry_.emitDashboardEvent("sensor_warning", "warning", sensorWarningMessage(sensorWarning_), snapshot(nowMs));
 }
 
 void AlcoholInterlockController::updatePreheat(uint32_t nowMs) {
@@ -172,6 +239,8 @@ void AlcoholInterlockController::startSampling(uint32_t nowMs) {
   sampling_.startedAtMs = nowMs;
   sampling_.nextSampleAtMs = nowMs;
   sampledAlcoholRaw_ = 0;
+  sampledStdDev_ = 0.0f;
+  lastTestToResultMs_ = 0;
   transitionTo(SystemState::Sampling);
   telemetry_.logSamplingStarted(snapshot(nowMs));
 }
@@ -181,25 +250,18 @@ void AlcoholInterlockController::updateSampling(uint32_t nowMs) {
     return;
   }
 
-  while (sampling_.active && sampling_.collected < config::timing::kSampleCount &&
-         nowMs >= sampling_.nextSampleAtMs) {
-    uint16_t raw = 0;
-    if (!io_.readAlcoholRaw(raw)) {
-      enterFault(FaultCode::AdcReadInvalid, "ADC returned invalid data during sampling");
-      return;
-    }
-
+  // Intentionally take at most one sample per update cycle.
+  // If loop() is delayed, skip missed slots instead of catching up in a burst.
+  if (sampling_.collected < config::timing::kSampleCount && nowMs >= sampling_.nextSampleAtMs) {
+    const uint16_t raw = io_.readAlcoholRaw();
     sampling_.sum += raw;
+    sampling_.sumSquares += static_cast<uint64_t>(raw) * static_cast<uint64_t>(raw);
     sampling_.lastRaw = raw;
     lastAlcoholRaw_ = raw;
     ++sampling_.collected;
-    sampling_.nextSampleAtMs += config::timing::kSampleIntervalMs;
+    sampling_.nextSampleAtMs = nowMs + config::timing::kSampleIntervalMs;
 
-    telemetry_.logSamplingProgress(
-        sampling_.collected,
-        config::timing::kSampleCount,
-        raw,
-        nowMs - sampling_.startedAtMs);
+    telemetry_.logSamplingProgress(sampling_.collected, config::timing::kSampleCount, raw, nowMs - sampling_.startedAtMs);
   }
 
   if (sampling_.collected >= config::timing::kSampleCount) {
@@ -212,9 +274,16 @@ void AlcoholInterlockController::finalizeSampling(uint32_t nowMs) {
   sampling_.completedAtMs = nowMs;
   sampledAlcoholRaw_ = static_cast<uint16_t>(sampling_.sum / config::timing::kSampleCount);
   lastAlcoholRaw_ = sampledAlcoholRaw_;
+  lastTestToResultMs_ = nowMs - sampling_.startedAtMs;
+
+  const float sampleMean = static_cast<float>(sampling_.sum) / static_cast<float>(config::timing::kSampleCount);
+  const float sampleMeanSquares = static_cast<float>(sampling_.sumSquares) / static_cast<float>(config::timing::kSampleCount);
+  const float sampleVariance = fmaxf(0.0f, sampleMeanSquares - (sampleMean * sampleMean));
+  sampledStdDev_ = sqrtf(sampleVariance);
 
   const bool passed = sampledAlcoholRaw_ < config::thresholds::kAlcoholAdc;
-  telemetry_.logSamplingResult(snapshot(nowMs), nowMs - sampling_.startedAtMs, passed);
+  consecutiveFailCount_ = passed ? 0 : (consecutiveFailCount_ + 1);
+  telemetry_.logSamplingResult(snapshot(nowMs), lastTestToResultMs_, passed);
 
   transitionTo(passed ? SystemState::PassReady : SystemState::FailLocked);
   telemetry_.emitDashboardEvent(
@@ -255,6 +324,7 @@ AppSnapshot AlcoholInterlockController::snapshot(uint32_t nowMs) const {
   AppSnapshot snapshot;
   snapshot.state = state_;
   snapshot.fault = fault_;
+  snapshot.sensorWarning = sensorWarning_;
   snapshot.displayReady = io_.isDisplayReady();
   snapshot.vehicleLocked = io_.vehicleLocked();
   snapshot.buzzerOn = io_.buzzerOn();
@@ -266,7 +336,13 @@ AppSnapshot AlcoholInterlockController::snapshot(uint32_t nowMs) const {
   snapshot.demoMode = config::features::kDemoMode;
   snapshot.buttonActiveHigh = config::buttons::kActiveHigh;
   snapshot.buttonMode = config::buttons::kModeName;
+  snapshot.buttonBias = config::buttons::kBiasName;
   snapshot.uptimeMs = nowMs;
+  snapshot.sensorWarningDurationMs = sensorWarningSinceMs_ > 0 ? (nowMs - sensorWarningSinceMs_) : 0;
+  snapshot.testToResultMs = lastTestToResultMs_;
+  snapshot.passReadyToUnlockMs = lastPassReadyToUnlockMs_;
+  snapshot.startToUnlockMs = lastStartToUnlockMs_;
+  snapshot.consecutiveFailCount = consecutiveFailCount_;
 
   if (state_ == SystemState::Preheat && nowMs >= preheatStartedAtMs_ &&
       nowMs - preheatStartedAtMs_ < config::timing::kPreheatMs) {
@@ -278,7 +354,9 @@ AppSnapshot AlcoholInterlockController::snapshot(uint32_t nowMs) const {
   snapshot.sampling.total = config::timing::kSampleCount;
   snapshot.sampling.startedAtMs = sampling_.startedAtMs;
   snapshot.sampling.completedAtMs = sampling_.completedAtMs;
+  snapshot.sampling.durationMs = sampling_.active ? (nowMs - sampling_.startedAtMs) : lastTestToResultMs_;
   snapshot.sampling.latestRaw = sampling_.lastRaw;
+  snapshot.sampling.stdDev = sampledStdDev_;
   return snapshot;
 }
 

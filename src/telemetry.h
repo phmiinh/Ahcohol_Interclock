@@ -14,6 +14,9 @@ class Telemetry {
   void logSamplingStarted(const AppSnapshot& snapshot);
   void logSamplingProgress(uint8_t sampleIndex, uint8_t totalSamples, uint16_t raw, uint32_t elapsedMs);
   void logSamplingResult(const AppSnapshot& snapshot, uint32_t durationMs, bool passed);
+  void logStartUnlockMetrics(const AppSnapshot& snapshot);
+  void logSensorWarning(SensorWarning warning, uint16_t raw, uint32_t durationMs);
+  void logSensorRecovered(uint16_t raw);
   void logFault(FaultCode fault, const char* message);
   void printLiveSensorDebug(const AppSnapshot& snapshot);
   void emitDashboardEvent(const char* eventName, const char* severity, const char* message, const AppSnapshot& snapshot);

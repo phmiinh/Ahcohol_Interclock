@@ -1,12 +1,12 @@
 # Alcohol Interlock System
 
-Prototype đồ án môn Xây dựng hệ thống nhúng dùng `ESP32` để kiểm tra nồng độ cồn trước khi cho phép khởi động. Hệ thống mô phỏng khóa liên động bằng `servo SG90`, hiển thị trạng thái qua `OLED SSD1306`, cảnh báo bằng `buzzer` và `LED đỏ/xanh/vàng`, nhận thao tác từ hai nút `TEST` và `START`.
+Đây là prototype đồ án môn Xây dựng hệ thống nhúng dùng `ESP32` để kiểm tra nồng độ cồn trước khi cho phép khởi động. Hệ thống mô phỏng khóa liên động bằng `servo SG90`, hiển thị trạng thái qua `OLED SSD1306`, cảnh báo bằng `buzzer` và `LED đỏ/xanh/vàng`, nhận thao tác từ hai nút `TEST` và `START`.
 
-Repo này giữ đúng hướng triển khai cho demo:
+Repo này được chốt theo đúng hướng demo hiện tại:
 - `ESP32 Arduino + PlatformIO`
 - `Wokwi local` để mô phỏng firmware
 - `potentiometer` thay `MQ3` trong Wokwi
-- `servo` là chấp hành chính
+- `servo` là cơ cấu chấp hành chính
 - `dashboard` realtime là phần mở rộng, không thay đổi logic nhúng cốt lõi
 
 Firmware source of truth là toàn bộ thư mục `src/`. Thư mục `.pio/` chỉ là build output local của PlatformIO và không phải source của dự án.
@@ -19,16 +19,23 @@ Ba flow chính cần chạy ổn định:
 2. `PASS rồi START`
 3. `FAIL rồi không cho START`
 
-Flow phụ để demo thuận tiện:
+Flow phụ để demo nhanh:
 - Khi đang `RUNNING`, nhấn `START` thêm lần nữa để quay về trạng thái khóa.
 
 ## Tính năng hiện có
 
 - State machine rõ ràng với các trạng thái `PREHEAT`, `STANDBY_LOCKED`, `SAMPLING`, `PASS_READY`, `FAIL_LOCKED`, `RUNNING`, `ERROR_LOCKED`
-- Sampling ADC và beep PASS đã chuyển sang non-blocking bằng `millis()`
-- Safe state khi lỗi: khóa xe, không cho START, giữ log lỗi rõ ràng
-- Telemetry `AI_JSON` vẫn tương thích với dashboard hiện tại
-- OLED, LED, buzzer và servo được tách module để dễ đọc và dễ giải thích khi báo cáo
+- Sampling ADC và beep PASS đều chạy non-blocking bằng `millis()`
+- Sampling chỉ lấy tối đa `1 mẫu / 1 vòng update`, không còn cơ chế dồn mẫu khi `loop()` bị trễ
+- Safe state khi fault cứng: servo khóa, không cho START, log lỗi rõ ràng
+- Cảnh báo sensor thực tế hơn: nếu ADC bị ghim gần `0` hoặc `4095` quá lâu thì phát `sensor warning`, không khóa hệ thống chỉ vì một lần đọc lạ
+- Telemetry `AI_JSON` giữ tương thích với dashboard hiện có
+- Serial log và telemetry đã có thêm metric để viết báo cáo:
+  - `test_to_result_ms`
+  - `pass_ready_to_unlock_ms`
+  - `start_to_unlock_ms`
+  - `sampleStdDev`
+  - `consecutiveFailCount`
 
 ## Pin mapping chuẩn
 
@@ -51,7 +58,7 @@ Flow phụ để demo thuận tiện:
 
 - `src/main.cpp`: entry point cho PlatformIO
 - `src/config.h`: pin map, timing, threshold, flag cấu hình
-- `src/state_machine.*`: FSM chính, non-blocking sampling, pass beep, fault handling
+- `src/state_machine.*`: FSM chính, sampling non-blocking, buzzer, fault handling
 - `src/io_devices.*`: servo, buzzer, LED, button, ADC, OLED init
 - `src/ui_oled.*`: render giao diện OLED
 - `src/telemetry.*`: log Serial và protocol `AI_JSON`
@@ -86,17 +93,20 @@ npm run mock
 ## Ghi chú prototype
 
 - Wokwi không dùng `MQ3` thật, mà dùng `potentiometer` để mô phỏng mức ADC.
-- `ALCOHOL_THRESHOLD` hiện là ngưỡng demo, không phải giá trị hiệu chuẩn cho phần cứng thật.
+- Trong Wokwi, `TEST` và `START` đang được mô phỏng bằng `pushbutton thường + điện trở kéo xuống 10k` để giả lập hành vi `OUT active-HIGH` của module nút 3 chân.
+- Trên phần cứng thật, bạn có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`; firmware vẫn đang coi hai input này là `active HIGH`.
+- `kDemoMode`, `kPreheatMs`, `kSampleCount` và `kAlcoholAdc` là tham số demo cho Wokwi và cho phần báo cáo, không phải calibration cuối cho `MQ3` thật.
 - Dashboard tối ưu cho `ESP32 thật qua USB serial`; dashboard không đọc trực tiếp từ cửa sổ Wokwi.
 - Nếu module nút của bạn là `active LOW`, đổi `config::buttons::kActiveHigh` trong [src/config.h](src/config.h).
 
 ## Known Hardware Assumptions
 
-- Firmware mặc định cho `button module 3 chân`.
-- Nút `TEST` và `START` đang giả định `active HIGH`.
-- Input button bật bias nội mặc định để giữ idle ổn định: `pulldown` khi `active HIGH`, `pullup` khi `active LOW`.
-- `START` được chốt là `GPIO16`.
-- Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32.
-- Nếu chuyển sang `MQ3` thật, cần calibration lại threshold và kiểm soát điện áp ADC vào `GPIO34`.
+- Firmware mặc định cho mô hình input `active HIGH`
+- Bias nội của ESP32 đang bật mặc định để giữ idle ổn định:
+  - `pulldown` khi `active HIGH`
+  - `pullup` khi `active LOW`
+- `START` được chốt là `GPIO16`
+- Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
+- Nếu chuyển sang `MQ3` thật, cần calibration lại threshold, thời gian warm-up và kiểm soát điện áp ADC vào `GPIO34`
 
 Chi tiết cách build, mô phỏng, chạy dashboard, wiring và checklist demo nằm trong [roadmap.md](roadmap.md).

@@ -1,6 +1,6 @@
 # Roadmap Vận Hành Dự Án
 
-Tài liệu này là hướng dẫn chạy và nối các phần của project sau refactor. `README.md` trả lời câu hỏi dự án là gì; file này tập trung vào cách build, cách demo và cách nối firmware với dashboard.
+File này tập trung vào cách build, cách demo và cách nối firmware với dashboard. `README.md` trả lời câu hỏi dự án là gì; file này trả lời câu hỏi chạy như thế nào.
 
 Source of truth cho firmware là `src/*`. Thư mục `.pio/` chỉ là output build local của PlatformIO.
 
@@ -81,7 +81,7 @@ Lưu ý:
 1. Start simulator
 2. Quan sát `OLED` hiển thị warm-up
 3. Quan sát `LED vàng` sáng
-4. Chờ hết `PREHEAT_MS` hiện tại
+4. Chờ hết `kPreheatMs`
 5. Hệ thống tự chuyển sang `STANDBY_LOCKED`
 
 ### Flow 2: PASS rồi START
@@ -90,11 +90,15 @@ Lưu ý:
 2. Nhấn `TEST`
 3. Quan sát:
    - OLED vào `SAMPLING`
-   - Serial log in thời gian lấy mẫu
-   - Kết quả trung bình nhỏ hơn threshold
+   - Serial log tiến độ từng mẫu
+   - log `average ADC`, `stddev`, `threshold`, `PASS`
+   - metric `test_to_result_ms`
 4. Hệ thống sang `PASS_READY`
 5. Nhấn `START`
 6. Servo mở khóa, state sang `RUNNING`
+7. Quan sát thêm metric:
+   - `pass_ready_to_unlock_ms`
+   - `start_to_unlock_ms`
 
 ### Flow 3: FAIL rồi không cho START
 
@@ -102,7 +106,8 @@ Lưu ý:
 2. Nhấn `TEST`
 3. Quan sát:
    - OLED vào `SAMPLING`
-   - Serial log average ADC, threshold, kết quả
+   - Serial log `average ADC`, `stddev`, `threshold`, `FAIL`
+   - `consecutiveFailCount` tăng
 4. Hệ thống sang `FAIL_LOCKED`
 5. `LED đỏ` sáng, `buzzer` cảnh báo
 6. Nhấn `START` sẽ không mở khóa
@@ -194,24 +199,37 @@ Lưu ý quan trọng:
 
 - `START` đã chốt là `GPIO16`, không dùng `GPIO12`
 - Wokwi dùng `potentiometer` thay `MQ3`
-- Phần cứng nút hiện mặc định là module `3 chân`, `active HIGH`
-- Firmware bật bias nội cho input button để tránh idle bị float: `pulldown` khi `active HIGH`, `pullup` khi `active LOW`
+- Wokwi đang dùng `pushbutton thường + điện trở kéo xuống 10k` để mô phỏng tín hiệu `OUT active-HIGH`
+- Phần cứng thật có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`
+- Firmware bật bias nội cho input button để tránh idle bị float:
+  - `pulldown` khi `active HIGH`
+  - `pullup` khi `active LOW`
 - Nếu module của bạn xuất `LOW` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h`
 - Nếu dùng `MQ3` thật và module cho analog `0-5V`, phải chia áp trước khi đưa vào `GPIO34`
 - Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
 
 ## 10. Fault handling hiện tại
 
-Sau refactor, hệ thống có fault handling tối thiểu nhưng rõ ràng:
+Sau refactor, hệ thống có fault handling tối thiểu nhưng thực tế hơn:
 
 - `OLED init fail` -> vào `ERROR_LOCKED`, giữ safe state, log lỗi qua Serial
-- `ADC read invalid` -> vào `ERROR_LOCKED`, khóa hệ thống
+- `ADC bị ghim gần 0 hoặc 4095 quá lâu` -> phát `sensor warning`, log cảnh báo và gửi telemetry, nhưng không khóa chết hệ thống chỉ vì một lần đọc bất thường
 - Safe state luôn là:
   - servo khóa
   - không cho START
   - telemetry vẫn giữ được nếu Serial còn hoạt động
 
-## 11. Checklist test trước khi demo
+## 11. Metric nên dùng trong báo cáo
+
+Serial log và `AI_JSON` hiện đã có sẵn các chỉ số sau:
+
+- `test_to_result_ms`: thời gian từ lúc nhấn `TEST` đến khi có kết quả PASS/FAIL
+- `pass_ready_to_unlock_ms`: thời gian chờ trong `PASS_READY` trước khi người dùng nhấn `START`
+- `start_to_unlock_ms`: độ trễ từ lúc nhấn `START` đến khi servo mở khóa
+- `sampleStdDev`: độ lệch chuẩn đơn giản của các mẫu ADC trong một phiên đo
+- `consecutiveFailCount`: số lần FAIL liên tiếp trước khi PASS
+
+## 12. Checklist test trước khi demo
 
 - `pio run` build thành công
 - Wokwi local start được từ `diagram.json`
@@ -219,13 +237,15 @@ Sau refactor, hệ thống có fault handling tối thiểu nhưng rõ ràng:
 - Nhánh `PASS -> START -> RUNNING` chạy đúng
 - Nhánh `FAIL -> START không có hiệu lực` chạy đúng
 - Serial log có:
-  - thời gian lấy mẫu
+  - tiến độ lấy mẫu
   - average ADC
+  - stddev
   - threshold
-  - kết quả PASS/FAIL
+  - PASS/FAIL
+  - các metric latency
 - Dashboard vẫn nhận được `AI_JSON` nếu test với board thật hoặc mock mode
 
-## 12. Troubleshooting nhanh
+## 13. Troubleshooting nhanh
 
 ### Wokwi không chạy
 
@@ -252,7 +272,13 @@ Kiểm tra:
 - `TEST -> GPIO14`
 - `START -> GPIO16`
 - module nút là `active HIGH` hay `active LOW`
+- wiring trong Wokwi đang mô phỏng `active-HIGH` bằng pulldown 10k
 
 ### Muốn chỉnh threshold hoặc thời gian demo
 
 Sửa trong `src/config.h`, sau đó build lại bằng `pio run`.
+
+Lưu ý:
+
+- các giá trị demo hiện tại phục vụ Wokwi, giúp log dễ nhìn và dễ trình bày
+- nếu chuyển sang `MQ3` thật thì phải calibration lại threshold, warm-up và cách diễn giải giá trị ADC

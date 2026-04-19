@@ -22,7 +22,7 @@ class IoDevices {
   bool isDisplayReady() const;
   Adafruit_SSD1306& display();
   bool buttonPressed(ButtonId button, uint32_t nowMs);
-  bool readAlcoholRaw(uint16_t& raw);
+  uint16_t readAlcoholRaw();
   void setBuzzer(bool on);
   void setIndicators(SystemState state);
   void lockVehicle();

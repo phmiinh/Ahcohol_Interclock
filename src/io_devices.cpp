@@ -62,14 +62,10 @@ bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
   return false;
 }
 
-bool IoDevices::readAlcoholRaw(uint16_t& raw) {
+uint16_t IoDevices::readAlcoholRaw() {
   const int value = analogRead(config::pins::kMq3);
-  if (value < config::thresholds::kAdcMin || value > config::thresholds::kAdcMax) {
-    return false;
-  }
-
-  raw = static_cast<uint16_t>(value);
-  return true;
+  const int clamped = constrain(value, config::thresholds::kAdcMin, config::thresholds::kAdcMax);
+  return static_cast<uint16_t>(clamped);
 }
 
 void IoDevices::setBuzzer(bool on) {

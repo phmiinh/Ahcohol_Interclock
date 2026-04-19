@@ -42,26 +42,35 @@ constexpr bool kEnableDashboardProtocol = true;
 }  // namespace features
 
 namespace thresholds {
+// Demo threshold for Wokwi / presentation flow. Re-calibrate when using a real MQ3.
 constexpr uint16_t kAlcoholAdc = 2000;
 constexpr int kAdcMin = 0;
 constexpr int kAdcMax = 4095;
+constexpr uint16_t kRailLowAdc = 1;
+constexpr uint16_t kRailHighAdc = 4094;
 }  // namespace thresholds
 
 namespace timing {
+// Demo preheat for faster presentation. Real hardware may need longer warm-up.
 constexpr uint32_t kPreheatMs = features::kDemoMode ? 10000UL : 60000UL;
+// Demo sampling window for Wokwi. Tune again if you move to a calibrated MQ3 setup.
 constexpr uint8_t kSampleCount = 20;
 constexpr uint32_t kSampleTotalMs = 1000UL;
-constexpr uint32_t kSampleIntervalMs = kSampleTotalMs / kSampleCount;
+constexpr uint32_t kSampleIntervalMs = kSampleCount > 1 ? (kSampleTotalMs / (kSampleCount - 1)) : kSampleTotalMs;
 constexpr uint32_t kPassBeepMs = 180UL;
 constexpr uint32_t kButtonDebounceMs = 60UL;
 constexpr uint32_t kUiRefreshMs = 200UL;
 constexpr uint32_t kFailBuzzerPeriodMs = 500UL;
 constexpr uint32_t kFailBuzzerOnMs = 220UL;
 constexpr uint32_t kSensorDebugMs = 400UL;
+constexpr uint32_t kSensorRailWarnMs = 8000UL;
 constexpr uint32_t kDashboardTelemetryMs = 500UL;
 }  // namespace timing
 
 namespace buttons {
+// Firmware logic targets an active-HIGH button model.
+// Wokwi uses plain pushbuttons plus 10k pulldown resistors to emulate the OUT pin of an active-HIGH button module.
+// Real hardware may use a 3-pin module or a discrete pushbutton with an equivalent bias network.
 constexpr bool kUse3PinModules = true;
 constexpr bool kActiveHigh = true;
 constexpr bool kUseInternalBias = true;

@@ -85,6 +85,8 @@ void Telemetry::logSamplingStarted(const AppSnapshot& snapshot) {
   Serial.print(snapshot.sampling.total);
   Serial.print(" | duration=");
   Serial.print(config::timing::kSampleTotalMs);
+  Serial.print(" ms | interval=");
+  Serial.print(config::timing::kSampleIntervalMs);
   Serial.print(" ms | threshold=");
   Serial.println(snapshot.threshold);
 }
@@ -110,10 +112,46 @@ void Telemetry::logSamplingResult(const AppSnapshot& snapshot, uint32_t duration
   printPrefix("RESULT");
   Serial.print("Average ADC=");
   Serial.print(snapshot.sampledAdc);
+  Serial.print(" | stddev=");
+  Serial.print(snapshot.sampling.stdDev, 1);
   Serial.print(" | threshold=");
   Serial.print(snapshot.threshold);
+  Serial.print(" | samples=");
+  Serial.print(snapshot.sampling.collected);
+  Serial.print("/");
+  Serial.print(snapshot.sampling.total);
   Serial.print(" | result=");
   Serial.println(passed ? "PASS" : "FAIL");
+
+  printPrefix("METRIC");
+  Serial.print("test_to_result_ms=");
+  Serial.print(snapshot.testToResultMs);
+  Serial.print(" | consecutive_fail_count=");
+  Serial.println(snapshot.consecutiveFailCount);
+}
+
+void Telemetry::logStartUnlockMetrics(const AppSnapshot& snapshot) {
+  printPrefix("METRIC");
+  Serial.print("pass_ready_to_unlock_ms=");
+  Serial.print(snapshot.passReadyToUnlockMs);
+  Serial.print(" | start_to_unlock_ms=");
+  Serial.println(snapshot.startToUnlockMs);
+}
+
+void Telemetry::logSensorWarning(SensorWarning warning, uint16_t raw, uint32_t durationMs) {
+  printPrefix("WARN");
+  Serial.print(sensorWarningToString(warning));
+  Serial.print(" | raw=");
+  Serial.print(raw);
+  Serial.print(" | duration=");
+  Serial.print(durationMs);
+  Serial.println(" ms");
+}
+
+void Telemetry::logSensorRecovered(uint16_t raw) {
+  printPrefix("INFO");
+  Serial.print("Sensor warning cleared | raw=");
+  Serial.println(raw);
 }
 
 void Telemetry::logFault(FaultCode fault, const char* message) {
@@ -162,6 +200,8 @@ void Telemetry::emitDashboardEvent(
   Serial.print(stateToString(snapshot.state));
   Serial.print("\",\"fault\":\"");
   Serial.print(faultToString(snapshot.fault));
+  Serial.print("\",\"sensorWarning\":\"");
+  Serial.print(sensorWarningToString(snapshot.sensorWarning));
   Serial.print("\",\"displayReady\":");
   Serial.print(snapshot.displayReady ? "true" : "false");
   Serial.print(",\"liveAdc\":");
@@ -176,6 +216,14 @@ void Telemetry::emitDashboardEvent(
   Serial.print(snapshot.buzzerOn ? "true" : "false");
   Serial.print(",\"servoAngle\":");
   Serial.print(snapshot.servoAngle);
+  Serial.print(",\"testToResultMs\":");
+  Serial.print(snapshot.testToResultMs);
+  Serial.print(",\"passReadyToUnlockMs\":");
+  Serial.print(snapshot.passReadyToUnlockMs);
+  Serial.print(",\"startToUnlockMs\":");
+  Serial.print(snapshot.startToUnlockMs);
+  Serial.print(",\"consecutiveFailCount\":");
+  Serial.print(snapshot.consecutiveFailCount);
   Serial.print(",\"uptimeMs\":");
   Serial.print(snapshot.uptimeMs);
   Serial.println("}");
@@ -198,6 +246,8 @@ void Telemetry::emitDashboardTelemetry(const AppSnapshot& snapshot, bool force) 
   Serial.print(resultToString(snapshot.state));
   Serial.print("\",\"fault\":\"");
   Serial.print(faultToString(snapshot.fault));
+  Serial.print("\",\"sensorWarning\":\"");
+  Serial.print(sensorWarningToString(snapshot.sensorWarning));
   Serial.print("\",\"displayReady\":");
   Serial.print(snapshot.displayReady ? "true" : "false");
   Serial.print(",\"liveAdc\":");
@@ -210,6 +260,8 @@ void Telemetry::emitDashboardTelemetry(const AppSnapshot& snapshot, bool force) 
   Serial.print(rawToPercent(snapshot.liveAdc), 1);
   Serial.print(",\"samplePercent\":");
   Serial.print(rawToPercent(snapshot.sampledAdc), 1);
+  Serial.print(",\"sampleStdDev\":");
+  Serial.print(snapshot.sampling.stdDev, 1);
   Serial.print(",\"preheatRemainingMs\":");
   Serial.print(snapshot.preheatRemainingMs);
   Serial.print(",\"demoMode\":");
@@ -226,12 +278,25 @@ void Telemetry::emitDashboardTelemetry(const AppSnapshot& snapshot, bool force) 
   Serial.print(snapshot.buttonMode);
   Serial.print("\",\"buttonActiveHigh\":");
   Serial.print(snapshot.buttonActiveHigh ? "true" : "false");
+  Serial.print(",\"buttonBias\":\"");
+  Serial.print(snapshot.buttonBias);
+  Serial.print("\"");
+  Serial.print(",\"sensorWarningDurationMs\":");
+  Serial.print(snapshot.sensorWarningDurationMs);
   Serial.print(",\"sampleCount\":");
   Serial.print(snapshot.sampling.collected);
   Serial.print(",\"sampleTotal\":");
   Serial.print(snapshot.sampling.total);
   Serial.print(",\"sampleElapsedMs\":");
   Serial.print(sampleElapsedMs(snapshot));
+  Serial.print(",\"testToResultMs\":");
+  Serial.print(snapshot.testToResultMs);
+  Serial.print(",\"passReadyToUnlockMs\":");
+  Serial.print(snapshot.passReadyToUnlockMs);
+  Serial.print(",\"startToUnlockMs\":");
+  Serial.print(snapshot.startToUnlockMs);
+  Serial.print(",\"consecutiveFailCount\":");
+  Serial.print(snapshot.consecutiveFailCount);
   Serial.print(",\"uptimeMs\":");
   Serial.print(snapshot.uptimeMs);
   Serial.println("}");

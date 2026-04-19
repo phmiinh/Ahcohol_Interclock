@@ -18,8 +18,13 @@ enum class SystemState : uint8_t {
 
 enum class FaultCode : uint8_t {
   None,
-  OledInitFailed,
-  AdcReadInvalid
+  OledInitFailed
+};
+
+enum class SensorWarning : uint8_t {
+  None,
+  SaturatedLow,
+  SaturatedHigh
 };
 
 struct SampleStatus {
@@ -28,12 +33,15 @@ struct SampleStatus {
   uint8_t total = config::timing::kSampleCount;
   uint32_t startedAtMs = 0;
   uint32_t completedAtMs = 0;
+  uint32_t durationMs = 0;
   uint16_t latestRaw = 0;
+  float stdDev = 0.0f;
 };
 
 struct AppSnapshot {
   SystemState state = SystemState::Preheat;
   FaultCode fault = FaultCode::None;
+  SensorWarning sensorWarning = SensorWarning::None;
   bool displayReady = true;
   bool vehicleLocked = true;
   bool buzzerOn = false;
@@ -46,7 +54,13 @@ struct AppSnapshot {
   bool demoMode = config::features::kDemoMode;
   bool buttonActiveHigh = config::buttons::kActiveHigh;
   const char* buttonMode = config::buttons::kModeName;
+  const char* buttonBias = config::buttons::kBiasName;
   uint32_t uptimeMs = 0;
+  uint32_t sensorWarningDurationMs = 0;
+  uint32_t testToResultMs = 0;
+  uint32_t passReadyToUnlockMs = 0;
+  uint32_t startToUnlockMs = 0;
+  uint32_t consecutiveFailCount = 0;
   SampleStatus sampling;
 };
 
@@ -125,11 +139,22 @@ inline const char* faultToString(FaultCode fault) {
       return "NONE";
     case FaultCode::OledInitFailed:
       return "OLED_INIT_FAILED";
-    case FaultCode::AdcReadInvalid:
-      return "ADC_READ_INVALID";
   }
 
   return "UNKNOWN_FAULT";
+}
+
+inline const char* sensorWarningToString(SensorWarning warning) {
+  switch (warning) {
+    case SensorWarning::None:
+      return "NONE";
+    case SensorWarning::SaturatedLow:
+      return "SATURATED_LOW";
+    case SensorWarning::SaturatedHigh:
+      return "SATURATED_HIGH";
+  }
+
+  return "UNKNOWN_WARNING";
 }
 
 inline float rawToPercent(uint16_t raw) {

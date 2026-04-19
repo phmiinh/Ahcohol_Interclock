@@ -126,8 +126,9 @@ function renderTelemetry() {
   elements.buzzerValue.textContent = telemetry.buzzerOn ? "ON" : "OFF";
   elements.startValue.textContent = telemetry.canStart ? "Cho phép" : "Chưa cho phép";
   elements.preheatValue.textContent = `${Math.ceil((telemetry.preheatRemainingMs || 0) / 1000)}s`;
+  const riskLevel = computeRiskLevel(telemetry);
   elements.riskPill.textContent = computeRiskLabel(telemetry);
-  elements.riskPill.className = `risk-pill ${telemetry.liveAdc >= telemetry.threshold ? "high" : ""}`;
+  elements.riskPill.className = `risk-pill ${riskLevel}`;
 
   drawHistoryChart();
 }
@@ -198,21 +199,33 @@ function describeState(telemetry) {
     PASS_READY: "Kết quả an toàn. Người dùng có thể nhấn START để mở khóa.",
     FAIL_LOCKED: "Phát hiện vượt ngưỡng. Xe tiếp tục bị khóa và còi cảnh báo có thể đang bật.",
     RUNNING: "Servo đã mở khóa và demo đang ở trạng thái vận hành.",
-    ERROR_LOCKED: "Hệ thống phát hiện lỗi phần cứng hoặc dữ liệu ADC bất thường và đã quay về safe state."
+    ERROR_LOCKED: "System entered safe-lock because of a critical fault such as OLED init failure."
   };
 
   return map[telemetry.state] || "Chưa có mô tả trạng thái.";
 }
 
-function computeRiskLabel(telemetry) {
+function computeRiskLevel(telemetry) {
   if (
     (telemetry.result || "").toUpperCase() === "FAIL" ||
     telemetry.state === "ERROR_LOCKED" ||
-    telemetry.liveAdc >= telemetry.threshold
+    telemetry.liveAdc >= telemetry.threshold ||
+    (telemetry.sensorWarning || "") !== "NONE"
   ) {
-    return "HIGH";
+    return "high";
   }
   if ((telemetry.result || "").toUpperCase() === "PASS") {
+    return "pass";
+  }
+  return "safe";
+}
+
+function computeRiskLabel(telemetry) {
+  const riskLevel = computeRiskLevel(telemetry);
+  if (riskLevel === "high") {
+    return "HIGH";
+  }
+  if (riskLevel === "pass") {
     return "PASS";
   }
   return "SAFE";
