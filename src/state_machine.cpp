@@ -183,7 +183,9 @@ void AlcoholInterlockController::enterFault(FaultCode fault, const char* message
 
 void AlcoholInterlockController::refreshLiveAdc(uint32_t nowMs) {
   lastAlcoholRaw_ = io_.readAlcoholRaw();
-  updateSensorHealth(nowMs);
+  if (state_ != SystemState::Sampling) {
+    updateSensorHealth(nowMs);
+  }
 }
 
 void AlcoholInterlockController::updateSensorHealth(uint32_t nowMs) {
@@ -256,6 +258,8 @@ void AlcoholInterlockController::updateSampling(uint32_t nowMs) {
     const uint16_t raw = io_.readAlcoholRaw();
     sampling_.sum += raw;
     sampling_.sumSquares += static_cast<uint64_t>(raw) * static_cast<uint64_t>(raw);
+    sampling_.allNearLowRail = sampling_.allNearLowRail && raw <= config::thresholds::kRailLowAdc;
+    sampling_.allNearHighRail = sampling_.allNearHighRail && raw >= config::thresholds::kRailHighAdc;
     sampling_.lastRaw = raw;
     lastAlcoholRaw_ = raw;
     ++sampling_.collected;
@@ -280,6 +284,11 @@ void AlcoholInterlockController::finalizeSampling(uint32_t nowMs) {
   const float sampleMeanSquares = static_cast<float>(sampling_.sumSquares) / static_cast<float>(config::timing::kSampleCount);
   const float sampleVariance = fmaxf(0.0f, sampleMeanSquares - (sampleMean * sampleMean));
   sampledStdDev_ = sqrtf(sampleVariance);
+
+  if (sampling_.allNearLowRail || sampling_.allNearHighRail) {
+    enterFault(FaultCode::SensorTimeout, "All samples stuck near ADC rail. Check sensor wiring.");
+    return;
+  }
 
   const bool passed = sampledAlcoholRaw_ < config::thresholds::kAlcoholAdc;
   consecutiveFailCount_ = passed ? 0 : (consecutiveFailCount_ + 1);

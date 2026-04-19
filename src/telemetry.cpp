@@ -60,6 +60,12 @@ void Telemetry::logButtonConfig() {
   Serial.print(config::buttons::kActiveHigh ? "HIGH" : "LOW");
   Serial.print(" | bias ");
   Serial.println(config::buttons::kBiasName);
+
+  printPrefix("BOOT");
+  Serial.println("TEST input uses GPIO interrupt + software debounce");
+
+  printPrefix("BOOT");
+  Serial.println("Buzzer uses LEDC hardware timer at 2 kHz");
 }
 
 void Telemetry::logStateChange(const AppSnapshot& snapshot) {

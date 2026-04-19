@@ -33,6 +33,11 @@ class IoDevices {
   int servoAngle() const;
 
  private:
+  // Keep the buzzer on an LEDC timer that is not shared with the servo setup.
+  static constexpr uint8_t kBuzzerLedcChannel = 6;
+  static constexpr uint32_t kBuzzerFreqHz = 2000;
+  static constexpr uint8_t kBuzzerLedcResolution = 8;
+
   struct ButtonTracker {
     int pin = -1;
     bool activeLevel = config::buttons::kActiveLevel;
@@ -40,6 +45,9 @@ class IoDevices {
     bool lastRead = config::buttons::kIdleLevel;
     uint32_t lastChangeMs = 0;
   };
+
+  static void IRAM_ATTR onTestButtonIsr();
+  static volatile bool testIrqFlag_;
 
   void initButton(ButtonTracker& button, int pin, uint32_t nowMs);
   ButtonTracker& buttonFor(ButtonId button);

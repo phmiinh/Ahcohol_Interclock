@@ -199,7 +199,7 @@ function describeState(telemetry) {
     PASS_READY: "Kết quả an toàn. Người dùng có thể nhấn START để mở khóa.",
     FAIL_LOCKED: "Phát hiện vượt ngưỡng. Xe tiếp tục bị khóa và còi cảnh báo có thể đang bật.",
     RUNNING: "Servo đã mở khóa và demo đang ở trạng thái vận hành.",
-    ERROR_LOCKED: "System entered safe-lock because of a critical fault such as OLED init failure."
+    ERROR_LOCKED: "System entered safe-lock because of a critical fault such as OLED init failure or sensor timeout."
   };
 
   return map[telemetry.state] || "Chưa có mô tả trạng thái.";

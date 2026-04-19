@@ -20,6 +20,8 @@ class AlcoholInterlockController {
 
   struct SamplingSession {
     bool active = false;
+    bool allNearLowRail = true;
+    bool allNearHighRail = true;
     uint8_t collected = 0;
     uint32_t sum = 0;
     uint64_t sumSquares = 0;

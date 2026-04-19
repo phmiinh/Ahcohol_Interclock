@@ -73,6 +73,7 @@ Lưu ý:
 
 - Wokwi local chỉ nạp firmware đã build sẵn từ PlatformIO
 - Nếu đổi tên env trong `platformio.ini`, phải cập nhật lại `wokwi.toml`
+- `TEST` hiện có thêm `GPIO interrupt`; Wokwi ESP32 vẫn mô phỏng được hướng này
 
 ## 6. Demo 3 flow chính
 
@@ -204,6 +205,8 @@ Lưu ý quan trọng:
 - Firmware bật bias nội cho input button để tránh idle bị float:
   - `pulldown` khi `active HIGH`
   - `pullup` khi `active LOW`
+- `TEST` dùng `interrupt` để set flag sớm, nhưng debounce vẫn xử lý bằng software
+- Buzzer dùng `LEDC hardware timer` để phát beep 2 kHz ổn định hơn
 - Nếu module của bạn xuất `LOW` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h`
 - Nếu dùng `MQ3` thật và module cho analog `0-5V`, phải chia áp trước khi đưa vào `GPIO34`
 - Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
@@ -214,6 +217,7 @@ Sau refactor, hệ thống có fault handling tối thiểu nhưng thực tế h
 
 - `OLED init fail` -> vào `ERROR_LOCKED`, giữ safe state, log lỗi qua Serial
 - `ADC bị ghim gần 0 hoặc 4095 quá lâu` -> phát `sensor warning`, log cảnh báo và gửi telemetry, nhưng không khóa chết hệ thống chỉ vì một lần đọc bất thường
+- `toàn bộ phiên sampling đều stuck near rail` -> vào hard fault `SENSOR_TIMEOUT`, vì đây là lỗi sensor/wiring trong đúng thời điểm ra quyết định PASS/FAIL
 - Safe state luôn là:
   - servo khóa
   - không cho START

@@ -27,8 +27,11 @@ Flow phụ để demo nhanh:
 - State machine rõ ràng với các trạng thái `PREHEAT`, `STANDBY_LOCKED`, `SAMPLING`, `PASS_READY`, `FAIL_LOCKED`, `RUNNING`, `ERROR_LOCKED`
 - Sampling ADC và beep PASS đều chạy non-blocking bằng `millis()`
 - Sampling chỉ lấy tối đa `1 mẫu / 1 vòng update`, không còn cơ chế dồn mẫu khi `loop()` bị trễ
+- Nút `TEST` có thêm `GPIO interrupt`, còn debounce vẫn giữ trong software để an toàn và dễ giải thích
+- Buzzer dùng `LEDC hardware timer` của ESP32 để phát beep 2 kHz ổn định hơn
 - Safe state khi fault cứng: servo khóa, không cho START, log lỗi rõ ràng
 - Cảnh báo sensor thực tế hơn: nếu ADC bị ghim gần `0` hoặc `4095` quá lâu thì phát `sensor warning`, không khóa hệ thống chỉ vì một lần đọc lạ
+- Nếu toàn bộ một phiên sampling đều bị ghim sát rail ADC thì vào hard fault `SENSOR_TIMEOUT`
 - Telemetry `AI_JSON` giữ tương thích với dashboard hiện có
 - Serial log và telemetry đã có thêm metric để viết báo cáo:
   - `test_to_result_ms`
@@ -96,6 +99,7 @@ npm run mock
 - Trong Wokwi, `TEST` và `START` đang được mô phỏng bằng `pushbutton thường + điện trở kéo xuống 10k` để giả lập hành vi `OUT active-HIGH` của module nút 3 chân.
 - Trên phần cứng thật, bạn có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`; firmware vẫn đang coi hai input này là `active HIGH`.
 - `kDemoMode`, `kPreheatMs`, `kSampleCount` và `kAlcoholAdc` là tham số demo cho Wokwi và cho phần báo cáo, không phải calibration cuối cho `MQ3` thật.
+- `TEST` đang dùng interrupt chỉ để set flag; debounce và logic nghiệp vụ vẫn chạy ở `loop()`, nên an toàn cho demo và đúng tinh thần embedded.
 - Dashboard tối ưu cho `ESP32 thật qua USB serial`; dashboard không đọc trực tiếp từ cửa sổ Wokwi.
 - Nếu module nút của bạn là `active LOW`, đổi `config::buttons::kActiveHigh` trong [src/config.h](src/config.h).
 

@@ -18,7 +18,8 @@ enum class SystemState : uint8_t {
 
 enum class FaultCode : uint8_t {
   None,
-  OledInitFailed
+  OledInitFailed,
+  SensorTimeout
 };
 
 enum class SensorWarning : uint8_t {
@@ -139,6 +140,8 @@ inline const char* faultToString(FaultCode fault) {
       return "NONE";
     case FaultCode::OledInitFailed:
       return "OLED_INIT_FAILED";
+    case FaultCode::SensorTimeout:
+      return "SENSOR_TIMEOUT";
   }
 
   return "UNKNOWN_FAULT";

@@ -2,6 +2,12 @@
 
 namespace app {
 
+volatile bool IoDevices::testIrqFlag_ = false;
+
+void IRAM_ATTR IoDevices::onTestButtonIsr() {
+  testIrqFlag_ = true;
+}
+
 IoDevices::IoDevices()
     : display_(config::display::kWidth, config::display::kHeight, &Wire, config::display::kReset) {}
 
@@ -10,9 +16,16 @@ void IoDevices::begin() {
   pinMode(config::pins::kLedGreen, OUTPUT);
   pinMode(config::pins::kLedYellow, OUTPUT);
   pinMode(config::pins::kBuzzer, OUTPUT);
+  ledcSetup(kBuzzerLedcChannel, kBuzzerFreqHz, kBuzzerLedcResolution);
+  ledcAttachPin(config::pins::kBuzzer, kBuzzerLedcChannel);
+  ledcWrite(kBuzzerLedcChannel, 0);
 
   const uint32_t now = millis();
   initButton(testButton_, config::pins::kButtonTest, now);
+  attachInterrupt(
+      digitalPinToInterrupt(config::pins::kButtonTest),
+      IoDevices::onTestButtonIsr,
+      config::buttons::kActiveHigh ? RISING : FALLING);
   initButton(startButton_, config::pins::kButtonStart, now);
 
   if (config::features::kEnableRelayOutput) {
@@ -47,6 +60,12 @@ Adafruit_SSD1306& IoDevices::display() {
 
 bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
   ButtonTracker& tracker = buttonFor(button);
+  if (button == ButtonId::Test && testIrqFlag_) {
+    testIrqFlag_ = false;
+    tracker.lastRead = tracker.activeLevel;
+    tracker.lastChangeMs = nowMs;
+  }
+
   const bool reading = digitalRead(tracker.pin);
 
   if (reading != tracker.lastRead) {
@@ -70,7 +89,7 @@ uint16_t IoDevices::readAlcoholRaw() {
 
 void IoDevices::setBuzzer(bool on) {
   buzzerOn_ = on;
-  digitalWrite(config::pins::kBuzzer, on ? HIGH : LOW);
+  ledcWrite(kBuzzerLedcChannel, on ? 128 : 0);
 }
 
 void IoDevices::setIndicators(SystemState state) {
