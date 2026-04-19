@@ -9,6 +9,8 @@ Repo này giữ đúng hướng triển khai cho demo:
 - `servo` là chấp hành chính
 - `dashboard` realtime là phần mở rộng, không thay đổi logic nhúng cốt lõi
 
+Firmware source of truth là toàn bộ thư mục `src/`. Thư mục `.pio/` chỉ là build output local của PlatformIO và không phải source của dự án.
+
 ## Mục tiêu demo
 
 Ba flow chính cần chạy ổn định:
@@ -87,5 +89,14 @@ npm run mock
 - `ALCOHOL_THRESHOLD` hiện là ngưỡng demo, không phải giá trị hiệu chuẩn cho phần cứng thật.
 - Dashboard tối ưu cho `ESP32 thật qua USB serial`; dashboard không đọc trực tiếp từ cửa sổ Wokwi.
 - Nếu module nút của bạn là `active LOW`, đổi `config::buttons::kActiveHigh` trong [src/config.h](src/config.h).
+
+## Known Hardware Assumptions
+
+- Firmware mặc định cho `button module 3 chân`.
+- Nút `TEST` và `START` đang giả định `active HIGH`.
+- Input button bật bias nội mặc định để giữ idle ổn định: `pulldown` khi `active HIGH`, `pullup` khi `active LOW`.
+- `START` được chốt là `GPIO16`.
+- Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32.
+- Nếu chuyển sang `MQ3` thật, cần calibration lại threshold và kiểm soát điện áp ADC vào `GPIO34`.
 
 Chi tiết cách build, mô phỏng, chạy dashboard, wiring và checklist demo nằm trong [roadmap.md](roadmap.md).

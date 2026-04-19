@@ -64,10 +64,14 @@ constexpr uint32_t kDashboardTelemetryMs = 500UL;
 namespace buttons {
 constexpr bool kUse3PinModules = true;
 constexpr bool kActiveHigh = true;
-constexpr uint8_t kPinMode = kUse3PinModules ? INPUT : INPUT_PULLUP;
+constexpr bool kUseInternalBias = true;
+// Keep the line at a stable idle level even if the external button module output floats.
+constexpr uint8_t kPinMode = kUseInternalBias ? (kActiveHigh ? INPUT_PULLDOWN : INPUT_PULLUP) : INPUT;
 constexpr bool kActiveLevel = kActiveHigh ? HIGH : LOW;
 constexpr bool kIdleLevel = kActiveHigh ? LOW : HIGH;
 constexpr const char* kModeName = kUse3PinModules ? "module_3pin" : "pushbutton";
+constexpr const char* kBiasName = kUseInternalBias ? (kActiveHigh ? "internal_pulldown" : "internal_pullup")
+                                                   : "external_bias";
 }  // namespace buttons
 
 constexpr long kSerialBaudRate = 115200;

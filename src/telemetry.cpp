@@ -40,6 +40,8 @@ void Telemetry::logBoot() {
   printPrefix("BOOT");
   Serial.println("Mode: ESP32 Arduino + PlatformIO + Wokwi local");
   printPrefix("BOOT");
+  Serial.println("Firmware source of truth: src/*");
+  printPrefix("BOOT");
   Serial.print("Pins TEST=");
   Serial.print(config::pins::kButtonTest);
   Serial.print(" START=");
@@ -55,7 +57,9 @@ void Telemetry::logButtonConfig() {
   Serial.print("Buttons: ");
   Serial.print(config::buttons::kModeName);
   Serial.print(" | active ");
-  Serial.println(config::buttons::kActiveHigh ? "HIGH" : "LOW");
+  Serial.print(config::buttons::kActiveHigh ? "HIGH" : "LOW");
+  Serial.print(" | bias ");
+  Serial.println(config::buttons::kBiasName);
 }
 
 void Telemetry::logStateChange(const AppSnapshot& snapshot) {

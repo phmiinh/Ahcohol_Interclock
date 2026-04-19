@@ -2,6 +2,8 @@
 
 Tài liệu này là hướng dẫn chạy và nối các phần của project sau refactor. `README.md` trả lời câu hỏi dự án là gì; file này tập trung vào cách build, cách demo và cách nối firmware với dashboard.
 
+Source of truth cho firmware là `src/*`. Thư mục `.pio/` chỉ là output build local của PlatformIO.
+
 ## 1. Khi nào dùng đường chạy nào
 
 | Nhu cầu | Cách chạy phù hợp |
@@ -193,6 +195,7 @@ Lưu ý quan trọng:
 - `START` đã chốt là `GPIO16`, không dùng `GPIO12`
 - Wokwi dùng `potentiometer` thay `MQ3`
 - Phần cứng nút hiện mặc định là module `3 chân`, `active HIGH`
+- Firmware bật bias nội cho input button để tránh idle bị float: `pulldown` khi `active HIGH`, `pullup` khi `active LOW`
 - Nếu module của bạn xuất `LOW` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h`
 - Nếu dùng `MQ3` thật và module cho analog `0-5V`, phải chia áp trước khi đưa vào `GPIO34`
 - Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
