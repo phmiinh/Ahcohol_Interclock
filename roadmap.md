@@ -232,6 +232,9 @@ Serial log và `AI_JSON` hiện đã có sẵn các chỉ số sau:
 - `start_to_unlock_ms`: độ trễ từ lúc nhấn `START` đến khi servo mở khóa
 - `sampleStdDev`: độ lệch chuẩn đơn giản của các mẫu ADC trong một phiên đo
 - `consecutiveFailCount`: số lần FAIL liên tiếp trước khi PASS
+- `retestRemainingMs`: thoi gian con lai truoc khi yeu cau rolling retest khi dang `RUNNING`
+- `retestDueToTestMs`: thoi gian tu luc he thong yeu cau retest den luc nguoi dung nhan `TEST`
+- `retestToResultMs`: thoi gian tu luc nhan `TEST` trong retest den khi co ket qua PASS/FAIL
 
 ## 12. Checklist test trước khi demo
 
@@ -248,6 +251,21 @@ Serial log và `AI_JSON` hiện đã có sẵn các chỉ số sau:
   - PASS/FAIL
   - các metric latency
 - Dashboard vẫn nhận được `AI_JSON` nếu test với board thật hoặc mock mode
+
+## Update: Running Periodic Retest
+
+Tinh nang moi: sau khi `PASS -> START -> RUNNING`, firmware bat dau dem nguoc retest. Production target la `30 phut`; trong `kDemoMode`, gia tri nay la `30 giay` de ban demo nhanh tren Wokwi.
+
+Khi het han, state chuyen sang `RETEST_REQUIRED`. He thong van giu servo mo khoa, bat LED xanh + vang va beep ngan de nhac. Nhan `TEST` se vao `RETEST_SAMPLING` trong khi xe van o trang thai running. PASS thi quay ve `RUNNING`; FAIL thi chuyen `FAIL_LOCKED`; neu het grace window ma khong test thi vao `ERROR_LOCKED` voi fault `RETEST_TIMEOUT`.
+
+Checklist log can lay them cho bao cao:
+- `STATE: Transition -> RETEST_REQUIRED`
+- `STATE: Transition -> RETEST_SAMPLING`
+- `AI_JSON` co `retestRequired=true`
+- `METRIC: retest_due_to_test_ms=... | retest_to_result_ms=...`
+- retest PASS: `sample_result` success va quay lai `RUNNING`
+- retest FAIL: `sample_result` warning va chuyen `FAIL_LOCKED`
+- retest timeout: `FAULT: RETEST_TIMEOUT`
 
 ## 13. Troubleshooting nhanh
 

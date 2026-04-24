@@ -36,11 +36,14 @@ class AlcoholInterlockController {
   void refreshLiveAdc(uint32_t nowMs);
   void updateSensorHealth(uint32_t nowMs);
   void updatePreheat(uint32_t nowMs);
-  void startSampling(uint32_t nowMs);
+  void startSampling(uint32_t nowMs, bool whileRunning = false);
   void updateSampling(uint32_t nowMs);
   void finalizeSampling(uint32_t nowMs);
+  void updateRunningRetestTimer(uint32_t nowMs);
+  void updateRetestRequired(uint32_t nowMs, bool testPressed, bool startPressed);
   void updatePassBeep(uint32_t nowMs);
   void updateFailBuzzer(uint32_t nowMs);
+  void updateRetestBuzzer(uint32_t nowMs);
   void updateUi(uint32_t nowMs, bool force = false);
   AppSnapshot snapshot(uint32_t nowMs) const;
 
@@ -60,6 +63,13 @@ class AlcoholInterlockController {
   uint32_t lastPassReadyToUnlockMs_ = 0;
   uint32_t lastStartToUnlockMs_ = 0;
   uint32_t consecutiveFailCount_ = 0;
+  uint32_t runningSessionStartedAtMs_ = 0;
+  uint32_t nextRetestAtMs_ = 0;
+  uint32_t retestRequiredAtMs_ = 0;
+  uint32_t retestCycleCount_ = 0;
+  uint32_t lastRetestDueToTestMs_ = 0;
+  uint32_t lastRetestToResultMs_ = 0;
+  bool samplingWhileRunning_ = false;
   uint16_t lastAlcoholRaw_ = 0;
   uint16_t sampledAlcoholRaw_ = 0;
   float sampledStdDev_ = 0.0f;

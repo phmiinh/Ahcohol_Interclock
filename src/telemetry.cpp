@@ -66,6 +66,13 @@ void Telemetry::logButtonConfig() {
 
   printPrefix("BOOT");
   Serial.println("Buzzer uses LEDC hardware timer at 2 kHz");
+
+  printPrefix("BOOT");
+  Serial.print("Running retest interval=");
+  Serial.print(config::timing::kRetestIntervalMs);
+  Serial.print(" ms | grace=");
+  Serial.print(config::timing::kRetestGraceMs);
+  Serial.println(" ms");
 }
 
 void Telemetry::logStateChange(const AppSnapshot& snapshot) {
@@ -134,6 +141,16 @@ void Telemetry::logSamplingResult(const AppSnapshot& snapshot, uint32_t duration
   Serial.print(snapshot.testToResultMs);
   Serial.print(" | consecutive_fail_count=");
   Serial.println(snapshot.consecutiveFailCount);
+
+  if (snapshot.retestRequired || snapshot.retestToResultMs > 0) {
+    printPrefix("METRIC");
+    Serial.print("retest_due_to_test_ms=");
+    Serial.print(snapshot.retestDueToTestMs);
+    Serial.print(" | retest_to_result_ms=");
+    Serial.print(snapshot.retestToResultMs);
+    Serial.print(" | next_retest_in_ms=");
+    Serial.println(config::timing::kRetestIntervalMs);
+  }
 }
 
 void Telemetry::logStartUnlockMetrics(const AppSnapshot& snapshot) {
@@ -230,6 +247,24 @@ void Telemetry::emitDashboardEvent(
   Serial.print(snapshot.startToUnlockMs);
   Serial.print(",\"consecutiveFailCount\":");
   Serial.print(snapshot.consecutiveFailCount);
+  Serial.print(",\"retestRequired\":");
+  Serial.print(snapshot.retestRequired ? "true" : "false");
+  Serial.print(",\"retestIntervalMs\":");
+  Serial.print(snapshot.retestIntervalMs);
+  Serial.print(",\"retestRemainingMs\":");
+  Serial.print(snapshot.retestRemainingMs);
+  Serial.print(",\"retestOverdueMs\":");
+  Serial.print(snapshot.retestOverdueMs);
+  Serial.print(",\"retestGraceRemainingMs\":");
+  Serial.print(snapshot.retestGraceRemainingMs);
+  Serial.print(",\"retestDueToTestMs\":");
+  Serial.print(snapshot.retestDueToTestMs);
+  Serial.print(",\"retestToResultMs\":");
+  Serial.print(snapshot.retestToResultMs);
+  Serial.print(",\"runningSessionMs\":");
+  Serial.print(snapshot.runningSessionMs);
+  Serial.print(",\"retestCycleCount\":");
+  Serial.print(snapshot.retestCycleCount);
   Serial.print(",\"uptimeMs\":");
   Serial.print(snapshot.uptimeMs);
   Serial.println("}");
@@ -303,6 +338,24 @@ void Telemetry::emitDashboardTelemetry(const AppSnapshot& snapshot, bool force) 
   Serial.print(snapshot.startToUnlockMs);
   Serial.print(",\"consecutiveFailCount\":");
   Serial.print(snapshot.consecutiveFailCount);
+  Serial.print(",\"retestRequired\":");
+  Serial.print(snapshot.retestRequired ? "true" : "false");
+  Serial.print(",\"retestIntervalMs\":");
+  Serial.print(snapshot.retestIntervalMs);
+  Serial.print(",\"retestRemainingMs\":");
+  Serial.print(snapshot.retestRemainingMs);
+  Serial.print(",\"retestOverdueMs\":");
+  Serial.print(snapshot.retestOverdueMs);
+  Serial.print(",\"retestGraceRemainingMs\":");
+  Serial.print(snapshot.retestGraceRemainingMs);
+  Serial.print(",\"retestDueToTestMs\":");
+  Serial.print(snapshot.retestDueToTestMs);
+  Serial.print(",\"retestToResultMs\":");
+  Serial.print(snapshot.retestToResultMs);
+  Serial.print(",\"runningSessionMs\":");
+  Serial.print(snapshot.runningSessionMs);
+  Serial.print(",\"retestCycleCount\":");
+  Serial.print(snapshot.retestCycleCount);
   Serial.print(",\"uptimeMs\":");
   Serial.print(snapshot.uptimeMs);
   Serial.println("}");

@@ -57,11 +57,19 @@ constexpr uint32_t kPreheatMs = features::kDemoMode ? 10000UL : 60000UL;
 constexpr uint8_t kSampleCount = 20;
 constexpr uint32_t kSampleTotalMs = 1000UL;
 constexpr uint32_t kSampleIntervalMs = kSampleCount > 1 ? (kSampleTotalMs / (kSampleCount - 1)) : kSampleTotalMs;
+// Rolling retest target is 30 minutes in production. Demo mode shortens it so the flow is testable in Wokwi.
+constexpr uint32_t kRetestProductionMs = 30UL * 60UL * 1000UL;
+constexpr uint32_t kRetestDemoMs = 30UL * 1000UL;
+constexpr uint32_t kRetestIntervalMs = features::kDemoMode ? kRetestDemoMs : kRetestProductionMs;
+// Grace window before safe-lock if the operator ignores a due retest.
+constexpr uint32_t kRetestGraceMs = features::kDemoMode ? 15UL * 1000UL : 5UL * 60UL * 1000UL;
 constexpr uint32_t kPassBeepMs = 180UL;
 constexpr uint32_t kButtonDebounceMs = 60UL;
 constexpr uint32_t kUiRefreshMs = 200UL;
 constexpr uint32_t kFailBuzzerPeriodMs = 500UL;
 constexpr uint32_t kFailBuzzerOnMs = 220UL;
+constexpr uint32_t kRetestBuzzerPeriodMs = 1200UL;
+constexpr uint32_t kRetestBuzzerOnMs = 120UL;
 constexpr uint32_t kSensorDebugMs = 400UL;
 constexpr uint32_t kSensorRailWarnMs = 8000UL;
 constexpr uint32_t kDashboardTelemetryMs = 500UL;

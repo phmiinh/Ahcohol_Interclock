@@ -83,7 +83,34 @@ void OledUi::render(IoDevices& io, const AppSnapshot& snapshot) {
       display.println("Servo unlocked");
       drawLiveLine(display, 40, "Live ADC: ", snapshot.liveAdc);
       display.setCursor(0, 52);
-      display.println("START = stop demo");
+      display.print("Retest in ");
+      display.print((snapshot.retestRemainingMs + 999UL) / 1000UL);
+      display.println("s");
+      break;
+
+    case SystemState::RetestRequired:
+      display.setCursor(0, 16);
+      display.println("RETEST REQUIRED");
+      display.setCursor(0, 28);
+      display.println("Press TEST again");
+      drawLiveLine(display, 40, "Live ADC: ", snapshot.liveAdc);
+      display.setCursor(0, 52);
+      display.print("Timeout ");
+      display.print((snapshot.retestGraceRemainingMs + 999UL) / 1000UL);
+      display.println("s");
+      break;
+
+    case SystemState::RetestSampling:
+      display.setCursor(0, 16);
+      display.println("RUNNING RETEST");
+      display.setCursor(0, 28);
+      display.print("Count: ");
+      display.print(snapshot.sampling.collected);
+      display.print("/");
+      display.println(snapshot.sampling.total);
+      drawLiveLine(display, 40, "Latest ADC: ", snapshot.sampling.latestRaw);
+      display.setCursor(0, 52);
+      display.println("Vehicle still run");
       break;
 
     case SystemState::ErrorLocked:

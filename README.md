@@ -1,5 +1,13 @@
 # Alcohol Interlock System
 
+## Periodic Retest While Running
+
+Sau khi vao `RUNNING`, firmware lap lich retest dinh ky. Production target la `30 phut`; khi `kDemoMode = true`, chu ky duoc rut xuong `30 giay` de demo duoc trong Wokwi.
+
+Khi den han, state chuyen sang `RETEST_REQUIRED`: servo van mo khoa, LED xanh + vang sang, buzzer beep ngan theo chu ky va OLED yeu cau nhan `TEST` lai. Khi nhan `TEST`, firmware vao `RETEST_SAMPLING` va lay mau non-blocking trong khi servo van mo. Neu retest PASS thi quay lai `RUNNING` va lap lich chu ky moi; neu FAIL thi ve `FAIL_LOCKED`; neu het grace window ma khong test thi vao `ERROR_LOCKED` voi fault `RETEST_TIMEOUT`.
+
+Telemetry `AI_JSON` co them cac field: `retestRequired`, `retestIntervalMs`, `retestRemainingMs`, `retestGraceRemainingMs`, `retestOverdueMs`, `retestDueToTestMs`, `retestToResultMs`, `runningSessionMs`, `retestCycleCount`.
+
 Đây là prototype đồ án môn Xây dựng hệ thống nhúng dùng `ESP32` để kiểm tra nồng độ cồn trước khi cho phép khởi động. Hệ thống mô phỏng khóa liên động bằng `servo SG90`, hiển thị trạng thái qua `OLED SSD1306`, cảnh báo bằng `buzzer` và `LED đỏ/xanh/vàng`, nhận thao tác từ hai nút `TEST` và `START`.
 
 Repo này được chốt theo đúng hướng demo hiện tại:
@@ -24,7 +32,7 @@ Flow phụ để demo nhanh:
 
 ## Tính năng hiện có
 
-- State machine rõ ràng với các trạng thái `PREHEAT`, `STANDBY_LOCKED`, `SAMPLING`, `PASS_READY`, `FAIL_LOCKED`, `RUNNING`, `ERROR_LOCKED`
+- State machine rõ ràng với các trạng thái `PREHEAT`, `STANDBY_LOCKED`, `SAMPLING`, `PASS_READY`, `FAIL_LOCKED`, `RUNNING`, `RETEST_REQUIRED`, `RETEST_SAMPLING`, `ERROR_LOCKED`
 - Sampling ADC và beep PASS đều chạy non-blocking bằng `millis()`
 - Sampling chỉ lấy tối đa `1 mẫu / 1 vòng update`, không còn cơ chế dồn mẫu khi `loop()` bị trễ
 - Nút `TEST` có thêm `GPIO interrupt`, còn debounce vẫn giữ trong software để an toàn và dễ giải thích

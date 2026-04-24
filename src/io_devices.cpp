@@ -106,6 +106,12 @@ void IoDevices::setIndicators(SystemState state) {
       digitalWrite(config::pins::kLedGreen, HIGH);
       break;
 
+    case SystemState::RetestRequired:
+    case SystemState::RetestSampling:
+      digitalWrite(config::pins::kLedGreen, HIGH);
+      digitalWrite(config::pins::kLedYellow, HIGH);
+      break;
+
     case SystemState::FailLocked:
       digitalWrite(config::pins::kLedRed, HIGH);
       break;

@@ -118,6 +118,9 @@
     }
   ],
   "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+
     [ "oled1:GND", "esp:GND.1", "black", [ "h0" ] ],
     [ "oled1:VCC", "esp:3V3", "red", [ "h0" ] ],
     [ "oled1:SDA", "esp:D21", "green", [ "h0" ] ],
@@ -156,5 +159,9 @@
     [ "mq3sim:VCC", "esp:3V3", "red", [ "v0" ] ],
     [ "mq3sim:SIG", "esp:D34", "orange", [ "v0" ] ]
   ],
+  "serialMonitor": {
+    "display": "always",
+    "newline": "lf"
+  },
   "dependencies": {}
 }

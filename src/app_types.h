@@ -13,13 +13,16 @@ enum class SystemState : uint8_t {
   PassReady,
   FailLocked,
   Running,
+  RetestRequired,
+  RetestSampling,
   ErrorLocked
 };
 
 enum class FaultCode : uint8_t {
   None,
   OledInitFailed,
-  SensorTimeout
+  SensorTimeout,
+  RetestTimeout
 };
 
 enum class SensorWarning : uint8_t {
@@ -62,6 +65,15 @@ struct AppSnapshot {
   uint32_t passReadyToUnlockMs = 0;
   uint32_t startToUnlockMs = 0;
   uint32_t consecutiveFailCount = 0;
+  bool retestRequired = false;
+  uint32_t retestIntervalMs = config::timing::kRetestIntervalMs;
+  uint32_t retestRemainingMs = 0;
+  uint32_t retestOverdueMs = 0;
+  uint32_t retestGraceRemainingMs = 0;
+  uint32_t retestDueToTestMs = 0;
+  uint32_t retestToResultMs = 0;
+  uint32_t runningSessionMs = 0;
+  uint32_t retestCycleCount = 0;
   SampleStatus sampling;
 };
 
@@ -79,6 +91,10 @@ inline const char* stateToString(SystemState state) {
       return "FAIL_LOCKED";
     case SystemState::Running:
       return "RUNNING";
+    case SystemState::RetestRequired:
+      return "RETEST_REQUIRED";
+    case SystemState::RetestSampling:
+      return "RETEST_SAMPLING";
     case SystemState::ErrorLocked:
       return "ERROR_LOCKED";
   }
@@ -91,6 +107,10 @@ inline const char* resultToString(SystemState state) {
     case SystemState::PassReady:
     case SystemState::Running:
       return "PASS";
+    case SystemState::RetestRequired:
+      return "RETEST_REQUIRED";
+    case SystemState::RetestSampling:
+      return "RETESTING";
     case SystemState::FailLocked:
     case SystemState::ErrorLocked:
       return "FAIL";
@@ -104,6 +124,9 @@ inline const char* stateSeverity(SystemState state) {
     case SystemState::PassReady:
     case SystemState::Running:
       return "success";
+    case SystemState::RetestRequired:
+    case SystemState::RetestSampling:
+      return "warning";
     case SystemState::FailLocked:
       return "warning";
     case SystemState::ErrorLocked:
@@ -127,6 +150,10 @@ inline const char* stateMessage(SystemState state) {
       return "Alcohol level above threshold. Vehicle locked";
     case SystemState::Running:
       return "Vehicle unlocked and running";
+    case SystemState::RetestRequired:
+      return "Periodic retest required while vehicle remains running";
+    case SystemState::RetestSampling:
+      return "Sampling periodic retest while vehicle remains running";
     case SystemState::ErrorLocked:
       return "System fault detected. Vehicle locked";
   }
@@ -142,6 +169,8 @@ inline const char* faultToString(FaultCode fault) {
       return "OLED_INIT_FAILED";
     case FaultCode::SensorTimeout:
       return "SENSOR_TIMEOUT";
+    case FaultCode::RetestTimeout:
+      return "RETEST_TIMEOUT";
   }
 
   return "UNKNOWN_FAULT";

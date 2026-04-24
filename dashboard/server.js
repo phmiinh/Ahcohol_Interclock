@@ -79,6 +79,15 @@ function createEmptyTelemetry() {
     passReadyToUnlockMs: 0,
     startToUnlockMs: 0,
     consecutiveFailCount: 0,
+    retestRequired: false,
+    retestIntervalMs: 30000,
+    retestRemainingMs: 0,
+    retestOverdueMs: 0,
+    retestGraceRemainingMs: 0,
+    retestDueToTestMs: 0,
+    retestToResultMs: 0,
+    runningSessionMs: 0,
+    retestCycleCount: 0,
     uptimeMs: 0,
     updatedAt: null
   };
@@ -339,6 +348,14 @@ function startMockStream() {
     let buzzerOn = false;
     let servoAngle = 0;
     let canStart = false;
+    let retestRequired = false;
+    let retestRemainingMs = 0;
+    let retestOverdueMs = 0;
+    let retestGraceRemainingMs = 0;
+    let retestDueToTestMs = 0;
+    let retestToResultMs = 0;
+    let runningSessionMs = 0;
+    let retestCycleCount = 0;
 
     if (mockStep < 5) {
       state = "PREHEAT";
@@ -359,10 +376,37 @@ function startMockStream() {
       sampledAdc = 1120;
       vehicleLocked = false;
       servoAngle = 90;
+      retestRemainingMs = (20 - mockStep) * 1000;
+      runningSessionMs = (mockStep - 16) * 1000;
+    } else if (mockStep < 23) {
+      state = "RETEST_REQUIRED";
+      result = "RETEST_REQUIRED";
+      liveAdc = 930;
+      sampledAdc = 1120;
+      vehicleLocked = false;
+      buzzerOn = mockStep % 2 === 0;
+      servoAngle = 90;
+      retestRequired = true;
+      retestOverdueMs = (mockStep - 20) * 1000;
+      retestGraceRemainingMs = Math.max(0, 15000 - retestOverdueMs);
+      runningSessionMs = (mockStep - 16) * 1000;
+      retestCycleCount = 1;
+    } else if (mockStep < 25) {
+      state = "RETEST_SAMPLING";
+      result = "RETESTING";
+      liveAdc = 940;
+      sampledAdc = 1120;
+      vehicleLocked = false;
+      servoAngle = 90;
+      retestRequired = true;
+      retestOverdueMs = (mockStep - 20) * 1000;
+      retestDueToTestMs = 2500;
+      runningSessionMs = (mockStep - 16) * 1000;
+      retestCycleCount = 1;
     } else {
       state = "FAIL_LOCKED";
       result = "FAIL";
-      liveAdc = 2900 + (mockStep - 20) * 90;
+      liveAdc = 2900 + (mockStep - 23) * 90;
       sampledAdc = liveAdc;
       buzzerOn = mockStep % 2 === 0;
     }
@@ -377,7 +421,12 @@ function startMockStream() {
       threshold: 2000,
       percent: Number(((liveAdc / 4095) * 100).toFixed(1)),
       samplePercent: Number(((sampledAdc / 4095) * 100).toFixed(1)),
-      sampleStdDev: state === "PASS_READY" || state === "RUNNING" ? 45.2 : state === "FAIL_LOCKED" ? 61.8 : 0,
+      sampleStdDev:
+        state === "PASS_READY" || state === "RUNNING" || state === "RETEST_SAMPLING"
+          ? 45.2
+          : state === "FAIL_LOCKED"
+            ? 61.8
+            : 0,
       preheatRemainingMs: state === "PREHEAT" ? (5 - mockStep) * 1000 : 0,
       demoMode: true,
       canStart,
@@ -388,13 +437,31 @@ function startMockStream() {
       buttonActiveHigh: true,
       buttonBias: "internal_pulldown",
       sensorWarningDurationMs: 0,
-      sampleCount: state === "PASS_READY" || state === "RUNNING" || state === "FAIL_LOCKED" ? 20 : 0,
+      sampleCount:
+        state === "PASS_READY" || state === "RUNNING" || state === "RETEST_SAMPLING" || state === "FAIL_LOCKED"
+          ? 20
+          : 0,
       sampleTotal: 20,
-      sampleElapsedMs: state === "PASS_READY" || state === "RUNNING" || state === "FAIL_LOCKED" ? 1000 : 0,
-      testToResultMs: state === "PASS_READY" || state === "RUNNING" || state === "FAIL_LOCKED" ? 1000 : 0,
+      sampleElapsedMs:
+        state === "PASS_READY" || state === "RUNNING" || state === "RETEST_SAMPLING" || state === "FAIL_LOCKED"
+          ? 1000
+          : 0,
+      testToResultMs:
+        state === "PASS_READY" || state === "RUNNING" || state === "RETEST_SAMPLING" || state === "FAIL_LOCKED"
+          ? 1000
+          : 0,
       passReadyToUnlockMs: state === "RUNNING" ? 1800 : 0,
       startToUnlockMs: state === "RUNNING" ? 12 : 0,
       consecutiveFailCount: state === "FAIL_LOCKED" ? 1 : 0,
+      retestRequired,
+      retestIntervalMs: 30000,
+      retestRemainingMs,
+      retestOverdueMs,
+      retestGraceRemainingMs,
+      retestDueToTestMs,
+      retestToResultMs,
+      runningSessionMs,
+      retestCycleCount,
       uptimeMs: mockStep * 1000
     });
 
@@ -415,6 +482,14 @@ function startMockStream() {
     }
 
     if (mockStep === 20) {
+      pushEvent({
+        event: "retest_required",
+        severity: "warning",
+        message: "Mock periodic retest requested"
+      });
+    }
+
+    if (mockStep === 23) {
       pushEvent({
         event: "sample_result",
         severity: "warning",

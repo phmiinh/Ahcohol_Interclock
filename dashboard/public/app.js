@@ -125,7 +125,10 @@ function renderTelemetry() {
   elements.lockValue.textContent = telemetry.vehicleLocked ? "Đang khóa" : "Đã mở";
   elements.buzzerValue.textContent = telemetry.buzzerOn ? "ON" : "OFF";
   elements.startValue.textContent = telemetry.canStart ? "Cho phép" : "Chưa cho phép";
-  elements.preheatValue.textContent = `${Math.ceil((telemetry.preheatRemainingMs || 0) / 1000)}s`;
+  elements.preheatValue.textContent = formatTimerValue(telemetry);
+  if (telemetry.retestRequired) {
+    elements.startValue.textContent = "TEST lại";
+  }
   const riskLevel = computeRiskLevel(telemetry);
   elements.riskPill.textContent = computeRiskLabel(telemetry);
   elements.riskPill.className = `risk-pill ${riskLevel}`;
@@ -199,7 +202,9 @@ function describeState(telemetry) {
     PASS_READY: "Kết quả an toàn. Người dùng có thể nhấn START để mở khóa.",
     FAIL_LOCKED: "Phát hiện vượt ngưỡng. Xe tiếp tục bị khóa và còi cảnh báo có thể đang bật.",
     RUNNING: "Servo đã mở khóa và demo đang ở trạng thái vận hành.",
-    ERROR_LOCKED: "System entered safe-lock because of a critical fault such as OLED init failure or sensor timeout."
+    RETEST_REQUIRED: "Periodic retest is due. Vehicle remains running, but the user must press TEST again.",
+    RETEST_SAMPLING: "Periodic retest sampling is running while the vehicle remains unlocked.",
+    ERROR_LOCKED: "System entered safe-lock because of a critical fault such as OLED init failure, sensor timeout, or retest timeout."
   };
 
   return map[telemetry.state] || "Chưa có mô tả trạng thái.";
@@ -209,6 +214,9 @@ function computeRiskLevel(telemetry) {
   if (
     (telemetry.result || "").toUpperCase() === "FAIL" ||
     telemetry.state === "ERROR_LOCKED" ||
+    telemetry.state === "RETEST_REQUIRED" ||
+    telemetry.state === "RETEST_SAMPLING" ||
+    telemetry.retestRequired ||
     telemetry.liveAdc >= telemetry.threshold ||
     (telemetry.sensorWarning || "") !== "NONE"
   ) {
@@ -221,6 +229,10 @@ function computeRiskLevel(telemetry) {
 }
 
 function computeRiskLabel(telemetry) {
+  if (telemetry.retestRequired || telemetry.state === "RETEST_REQUIRED" || telemetry.state === "RETEST_SAMPLING") {
+    return "RETEST";
+  }
+
   const riskLevel = computeRiskLevel(telemetry);
   if (riskLevel === "high") {
     return "HIGH";
@@ -229,6 +241,26 @@ function computeRiskLabel(telemetry) {
     return "PASS";
   }
   return "SAFE";
+}
+
+function formatTimerValue(telemetry) {
+  if (telemetry.state === "PREHEAT") {
+    return `${Math.ceil((telemetry.preheatRemainingMs || 0) / 1000)}s`;
+  }
+
+  if (telemetry.state === "RUNNING") {
+    return `Retest ${Math.ceil((telemetry.retestRemainingMs || 0) / 1000)}s`;
+  }
+
+  if (telemetry.state === "RETEST_REQUIRED") {
+    return `Grace ${Math.ceil((telemetry.retestGraceRemainingMs || 0) / 1000)}s`;
+  }
+
+  if (telemetry.state === "RETEST_SAMPLING") {
+    return `Sample ${Math.ceil((telemetry.sampleElapsedMs || 0) / 1000)}s`;
+  }
+
+  return "0s";
 }
 
 function formatDate(value) {

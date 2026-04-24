@@ -68,6 +68,7 @@ void AlcoholInterlockController::update() {
       break;
 
     case SystemState::Sampling:
+    case SystemState::RetestSampling:
       updateSampling(nowMs);
       break;
 
@@ -95,10 +96,18 @@ void AlcoholInterlockController::update() {
       break;
 
     case SystemState::Running:
+      updateRunningRetestTimer(nowMs);
       if (startPressed) {
         telemetry_.logAction("START pressed while RUNNING. Returning to locked standby");
         transitionTo(SystemState::StandbyLocked);
+      } else if (testPressed) {
+        telemetry_.logAction("Manual running retest requested");
+        startSampling(nowMs, true);
       }
+      break;
+
+    case SystemState::RetestRequired:
+      updateRetestRequired(nowMs, testPressed, startPressed);
       break;
 
     case SystemState::ErrorLocked:
@@ -108,6 +117,8 @@ void AlcoholInterlockController::update() {
   updatePassBeep(nowMs);
   if (state_ == SystemState::FailLocked) {
     updateFailBuzzer(nowMs);
+  } else if (state_ == SystemState::RetestRequired) {
+    updateRetestBuzzer(nowMs);
   } else if (!passBeep_.active) {
     io_.setBuzzer(false);
   }
@@ -117,10 +128,11 @@ void AlcoholInterlockController::update() {
 
 void AlcoholInterlockController::transitionTo(SystemState newState) {
   const uint32_t transitionStartedAtMs = millis();
+  const SystemState previousState = state_;
   state_ = newState;
   passBeep_ = {};
 
-  if (state_ != SystemState::Sampling) {
+  if (state_ != SystemState::Sampling && state_ != SystemState::RetestSampling) {
     sampling_.active = false;
   }
 
@@ -130,13 +142,40 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
     passReadyEnteredAtMs_ = 0;
   }
 
+  if (state_ == SystemState::Running) {
+    if (previousState != SystemState::RetestRequired && previousState != SystemState::RetestSampling) {
+      runningSessionStartedAtMs_ = transitionStartedAtMs;
+      retestCycleCount_ = 0;
+    }
+    nextRetestAtMs_ = transitionStartedAtMs + config::timing::kRetestIntervalMs;
+    retestRequiredAtMs_ = 0;
+    samplingWhileRunning_ = false;
+  } else if (state_ == SystemState::RetestRequired) {
+    retestRequiredAtMs_ = transitionStartedAtMs;
+    ++retestCycleCount_;
+  } else if (state_ != SystemState::Sampling && state_ != SystemState::RetestSampling) {
+    runningSessionStartedAtMs_ = 0;
+    nextRetestAtMs_ = 0;
+    retestRequiredAtMs_ = 0;
+    samplingWhileRunning_ = false;
+  }
+
   switch (state_) {
     case SystemState::Preheat:
     case SystemState::StandbyLocked:
-    case SystemState::Sampling:
     case SystemState::PassReady:
       io_.setBuzzer(false);
       io_.lockVehicle();
+      break;
+
+    case SystemState::Sampling:
+      io_.setBuzzer(false);
+      io_.lockVehicle();
+      break;
+
+    case SystemState::RetestSampling:
+      io_.setBuzzer(false);
+      io_.unlockVehicle();
       break;
 
     case SystemState::FailLocked:
@@ -145,6 +184,11 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
       break;
 
     case SystemState::Running:
+      io_.setBuzzer(false);
+      io_.unlockVehicle();
+      break;
+
+    case SystemState::RetestRequired:
       io_.setBuzzer(false);
       io_.unlockVehicle();
       break;
@@ -183,7 +227,7 @@ void AlcoholInterlockController::enterFault(FaultCode fault, const char* message
 
 void AlcoholInterlockController::refreshLiveAdc(uint32_t nowMs) {
   lastAlcoholRaw_ = io_.readAlcoholRaw();
-  if (state_ != SystemState::Sampling) {
+  if (state_ != SystemState::Sampling && state_ != SystemState::RetestSampling) {
     updateSensorHealth(nowMs);
   }
 }
@@ -235,15 +279,21 @@ void AlcoholInterlockController::updatePreheat(uint32_t nowMs) {
   }
 }
 
-void AlcoholInterlockController::startSampling(uint32_t nowMs) {
+void AlcoholInterlockController::startSampling(uint32_t nowMs, bool whileRunning) {
   sampling_ = {};
   sampling_.active = true;
   sampling_.startedAtMs = nowMs;
   sampling_.nextSampleAtMs = nowMs;
+  samplingWhileRunning_ = whileRunning;
   sampledAlcoholRaw_ = 0;
   sampledStdDev_ = 0.0f;
-  lastTestToResultMs_ = 0;
-  transitionTo(SystemState::Sampling);
+  if (whileRunning) {
+    lastRetestToResultMs_ = 0;
+    lastRetestDueToTestMs_ = retestRequiredAtMs_ > 0 ? (nowMs - retestRequiredAtMs_) : 0;
+  } else {
+    lastTestToResultMs_ = 0;
+  }
+  transitionTo(whileRunning ? SystemState::RetestSampling : SystemState::Sampling);
   telemetry_.logSamplingStarted(snapshot(nowMs));
 }
 
@@ -278,7 +328,11 @@ void AlcoholInterlockController::finalizeSampling(uint32_t nowMs) {
   sampling_.completedAtMs = nowMs;
   sampledAlcoholRaw_ = static_cast<uint16_t>(sampling_.sum / config::timing::kSampleCount);
   lastAlcoholRaw_ = sampledAlcoholRaw_;
-  lastTestToResultMs_ = nowMs - sampling_.startedAtMs;
+  const uint32_t resultDurationMs = nowMs - sampling_.startedAtMs;
+  lastTestToResultMs_ = resultDurationMs;
+  if (samplingWhileRunning_) {
+    lastRetestToResultMs_ = resultDurationMs;
+  }
 
   const float sampleMean = static_cast<float>(sampling_.sum) / static_cast<float>(config::timing::kSampleCount);
   const float sampleMeanSquares = static_cast<float>(sampling_.sumSquares) / static_cast<float>(config::timing::kSampleCount);
@@ -291,15 +345,50 @@ void AlcoholInterlockController::finalizeSampling(uint32_t nowMs) {
   }
 
   const bool passed = sampledAlcoholRaw_ < config::thresholds::kAlcoholAdc;
+  const bool wasRetest = samplingWhileRunning_;
   consecutiveFailCount_ = passed ? 0 : (consecutiveFailCount_ + 1);
-  telemetry_.logSamplingResult(snapshot(nowMs), lastTestToResultMs_, passed);
+  telemetry_.logSamplingResult(snapshot(nowMs), resultDurationMs, passed);
 
-  transitionTo(passed ? SystemState::PassReady : SystemState::FailLocked);
+  transitionTo(passed ? (wasRetest ? SystemState::Running : SystemState::PassReady) : SystemState::FailLocked);
   telemetry_.emitDashboardEvent(
       "sample_result",
       passed ? "success" : "warning",
-      passed ? "Alcohol level safe" : "Alcohol level above threshold",
+      passed ? (wasRetest ? "Periodic retest passed. Vehicle continues running" : "Alcohol level safe")
+             : (wasRetest ? "Periodic retest failed. Vehicle locked" : "Alcohol level above threshold"),
       snapshot(millis()));
+}
+
+void AlcoholInterlockController::updateRunningRetestTimer(uint32_t nowMs) {
+  if (nextRetestAtMs_ == 0 || nowMs < nextRetestAtMs_) {
+    return;
+  }
+
+  telemetry_.logAction("Periodic retest required. Press TEST to continue running");
+  transitionTo(SystemState::RetestRequired);
+  telemetry_.emitDashboardEvent(
+      "retest_required",
+      "warning",
+      config::features::kDemoMode ? "Demo retest is due. Press TEST to continue running."
+                                  : "30-minute periodic retest is due. Press TEST to verify alcohol level again.",
+      snapshot(millis()));
+}
+
+void AlcoholInterlockController::updateRetestRequired(uint32_t nowMs, bool testPressed, bool startPressed) {
+  if (testPressed) {
+    telemetry_.logAction("Periodic retest accepted. Sampling while vehicle remains running");
+    startSampling(nowMs, true);
+    return;
+  }
+
+  if (startPressed) {
+    telemetry_.logAction("START pressed during retest request. Returning to locked standby");
+    transitionTo(SystemState::StandbyLocked);
+    return;
+  }
+
+  if (retestRequiredAtMs_ > 0 && nowMs - retestRequiredAtMs_ >= config::timing::kRetestGraceMs) {
+    enterFault(FaultCode::RetestTimeout, "Periodic retest timeout. Vehicle locked in safe state.");
+  }
 }
 
 void AlcoholInterlockController::updatePassBeep(uint32_t nowMs) {
@@ -318,6 +407,11 @@ void AlcoholInterlockController::updatePassBeep(uint32_t nowMs) {
 void AlcoholInterlockController::updateFailBuzzer(uint32_t nowMs) {
   const uint32_t phase = nowMs % config::timing::kFailBuzzerPeriodMs;
   io_.setBuzzer(phase < config::timing::kFailBuzzerOnMs);
+}
+
+void AlcoholInterlockController::updateRetestBuzzer(uint32_t nowMs) {
+  const uint32_t phase = nowMs % config::timing::kRetestBuzzerPeriodMs;
+  io_.setBuzzer(phase < config::timing::kRetestBuzzerOnMs);
 }
 
 void AlcoholInterlockController::updateUi(uint32_t nowMs, bool force) {
@@ -352,6 +446,31 @@ AppSnapshot AlcoholInterlockController::snapshot(uint32_t nowMs) const {
   snapshot.passReadyToUnlockMs = lastPassReadyToUnlockMs_;
   snapshot.startToUnlockMs = lastStartToUnlockMs_;
   snapshot.consecutiveFailCount = consecutiveFailCount_;
+  snapshot.retestRequired = state_ == SystemState::RetestRequired || state_ == SystemState::RetestSampling;
+  snapshot.retestIntervalMs = config::timing::kRetestIntervalMs;
+  snapshot.retestCycleCount = retestCycleCount_;
+  snapshot.retestDueToTestMs = lastRetestDueToTestMs_;
+  snapshot.retestToResultMs = lastRetestToResultMs_;
+
+  if ((state_ == SystemState::Running || state_ == SystemState::RetestRequired ||
+       state_ == SystemState::RetestSampling || samplingWhileRunning_) &&
+      runningSessionStartedAtMs_ > 0 && nowMs >= runningSessionStartedAtMs_) {
+    snapshot.runningSessionMs = nowMs - runningSessionStartedAtMs_;
+  }
+
+  if (state_ == SystemState::Running && nextRetestAtMs_ > 0) {
+    snapshot.retestRemainingMs = nowMs < nextRetestAtMs_ ? (nextRetestAtMs_ - nowMs) : 0;
+  } else if (state_ == SystemState::RetestRequired) {
+    snapshot.retestRemainingMs = 0;
+    snapshot.retestOverdueMs =
+        retestRequiredAtMs_ > 0 && nowMs >= retestRequiredAtMs_ ? (nowMs - retestRequiredAtMs_) : 0;
+    snapshot.retestGraceRemainingMs = snapshot.retestOverdueMs < config::timing::kRetestGraceMs
+                                          ? (config::timing::kRetestGraceMs - snapshot.retestOverdueMs)
+                                          : 0;
+  } else if ((state_ == SystemState::RetestSampling || samplingWhileRunning_) && retestRequiredAtMs_ > 0 &&
+             nowMs >= retestRequiredAtMs_) {
+    snapshot.retestOverdueMs = nowMs - retestRequiredAtMs_;
+  }
 
   if (state_ == SystemState::Preheat && nowMs >= preheatStartedAtMs_ &&
       nowMs - preheatStartedAtMs_ < config::timing::kPreheatMs) {
