@@ -62,7 +62,7 @@ void Telemetry::logButtonConfig() {
   Serial.println(config::buttons::kBiasName);
 
   printPrefix("BOOT");
-  Serial.println("TEST input uses GPIO interrupt + software debounce");
+  Serial.println("TEST/START inputs use GPIO interrupt + software debounce");
 
   printPrefix("BOOT");
   Serial.println("Buzzer uses LEDC hardware timer at 2 kHz");
@@ -73,6 +73,10 @@ void Telemetry::logButtonConfig() {
   Serial.print(" ms | grace=");
   Serial.print(config::timing::kRetestGraceMs);
   Serial.println(" ms");
+
+  printPrefix("BOOT");
+  Serial.print("Serial mode: ");
+  Serial.println(config::features::kEnableDashboardProtocol ? "dashboard AI_JSON stream" : "quiet Wokwi monitor");
 }
 
 void Telemetry::logStateChange(const AppSnapshot& snapshot) {
@@ -105,6 +109,10 @@ void Telemetry::logSamplingStarted(const AppSnapshot& snapshot) {
 }
 
 void Telemetry::logSamplingProgress(uint8_t sampleIndex, uint8_t totalSamples, uint16_t raw, uint32_t elapsedMs) {
+  if (!config::features::kEnableSampleProgressLog) {
+    return;
+  }
+
   printPrefix("SAMPLE");
   Serial.print(sampleIndex);
   Serial.print("/");

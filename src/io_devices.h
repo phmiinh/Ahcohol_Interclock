@@ -44,12 +44,16 @@ class IoDevices {
     bool lastStable = config::buttons::kIdleLevel;
     bool lastRead = config::buttons::kIdleLevel;
     uint32_t lastChangeMs = 0;
+    uint32_t lastPressEventMs = 0;
   };
 
   static void IRAM_ATTR onTestButtonIsr();
+  static void IRAM_ATTR onStartButtonIsr();
   static volatile bool testIrqFlag_;
+  static volatile bool startIrqFlag_;
 
   void initButton(ButtonTracker& button, int pin, uint32_t nowMs);
+  bool consumeButtonIrq(ButtonId button);
   ButtonTracker& buttonFor(ButtonId button);
   void clearLeds();
   void setRelay(bool enabled);

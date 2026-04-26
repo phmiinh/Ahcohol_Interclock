@@ -97,7 +97,8 @@ void AlcoholInterlockController::update() {
 
     case SystemState::Running:
       updateRunningRetestTimer(nowMs);
-      if (startPressed) {
+      if (startPressed && runningSessionStartedAtMs_ > 0 &&
+          nowMs - runningSessionStartedAtMs_ >= config::timing::kRunningStartRelockGuardMs) {
         telemetry_.logAction("START pressed while RUNNING. Returning to locked standby");
         transitionTo(SystemState::StandbyLocked);
       } else if (testPressed) {
@@ -339,9 +340,17 @@ void AlcoholInterlockController::finalizeSampling(uint32_t nowMs) {
   const float sampleVariance = fmaxf(0.0f, sampleMeanSquares - (sampleMean * sampleMean));
   sampledStdDev_ = sqrtf(sampleVariance);
 
-  if (sampling_.allNearLowRail || sampling_.allNearHighRail) {
+  const bool allSamplesNearRail = sampling_.allNearLowRail || sampling_.allNearHighRail;
+  if (allSamplesNearRail && config::features::kFaultOnAllRailSamples) {
     enterFault(FaultCode::SensorTimeout, "All samples stuck near ADC rail. Check sensor wiring.");
     return;
+  }
+
+  if (allSamplesNearRail) {
+    telemetry_.logSensorWarning(
+        sampling_.allNearLowRail ? SensorWarning::SaturatedLow : SensorWarning::SaturatedHigh,
+        sampledAlcoholRaw_,
+        resultDurationMs);
   }
 
   const bool passed = sampledAlcoholRaw_ < config::thresholds::kAlcoholAdc;

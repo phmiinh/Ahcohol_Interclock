@@ -151,8 +151,8 @@
     [ "rBtnTest:2", "esp:GND.1", "black", [ "v0" ] ],
 
     [ "btnStart:1.l", "esp:3V3", "red", [ "v0" ] ],
-    [ "btnStart:2.l", "esp:D16", "red", [ "v0" ] ],
-    [ "rBtnStart:1", "esp:D16", "red", [ "v0" ] ],
+    [ "btnStart:2.l", "esp:RX2", "red", [ "v0" ] ],
+    [ "rBtnStart:1", "esp:RX2", "red", [ "v0" ] ],
     [ "rBtnStart:2", "esp:GND.1", "black", [ "v0" ] ],
 
     [ "mq3sim:GND", "esp:GND.2", "black", [ "v0" ] ],

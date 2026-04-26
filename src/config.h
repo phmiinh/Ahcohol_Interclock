@@ -37,8 +37,15 @@ constexpr int kMaxPulseUs = 2400;
 namespace features {
 constexpr bool kDemoMode = true;
 constexpr bool kEnableRelayOutput = false;
-constexpr bool kEnableSensorDebug = true;
-constexpr bool kEnableDashboardProtocol = true;
+// Keep Wokwi Serial Monitor readable by default. Enable these when collecting
+// detailed telemetry or using the realtime dashboard with a physical ESP32.
+constexpr bool kEnableSensorDebug = false;
+constexpr bool kEnableDashboardProtocol = false;
+constexpr bool kEnableSampleProgressLog = false;
+// In Wokwi, users often turn the potentiometer fully to 0 or 4095 to demo
+// PASS/FAIL. Treat that as a warning in demo mode, but keep strict fail-safe
+// behavior available for production hardware.
+constexpr bool kFaultOnAllRailSamples = !kDemoMode;
 }  // namespace features
 
 namespace thresholds {
@@ -65,6 +72,7 @@ constexpr uint32_t kRetestIntervalMs = features::kDemoMode ? kRetestDemoMs : kRe
 constexpr uint32_t kRetestGraceMs = features::kDemoMode ? 15UL * 1000UL : 5UL * 60UL * 1000UL;
 constexpr uint32_t kPassBeepMs = 180UL;
 constexpr uint32_t kButtonDebounceMs = 60UL;
+constexpr uint32_t kRunningStartRelockGuardMs = 800UL;
 constexpr uint32_t kUiRefreshMs = 200UL;
 constexpr uint32_t kFailBuzzerPeriodMs = 500UL;
 constexpr uint32_t kFailBuzzerOnMs = 220UL;

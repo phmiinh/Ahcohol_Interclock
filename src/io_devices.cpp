@@ -3,9 +3,14 @@
 namespace app {
 
 volatile bool IoDevices::testIrqFlag_ = false;
+volatile bool IoDevices::startIrqFlag_ = false;
 
 void IRAM_ATTR IoDevices::onTestButtonIsr() {
   testIrqFlag_ = true;
+}
+
+void IRAM_ATTR IoDevices::onStartButtonIsr() {
+  startIrqFlag_ = true;
 }
 
 IoDevices::IoDevices()
@@ -27,6 +32,10 @@ void IoDevices::begin() {
       IoDevices::onTestButtonIsr,
       config::buttons::kActiveHigh ? RISING : FALLING);
   initButton(startButton_, config::pins::kButtonStart, now);
+  attachInterrupt(
+      digitalPinToInterrupt(config::pins::kButtonStart),
+      IoDevices::onStartButtonIsr,
+      config::buttons::kActiveHigh ? RISING : FALLING);
 
   if (config::features::kEnableRelayOutput) {
     pinMode(config::pins::kRelay, OUTPUT);
@@ -60,13 +69,15 @@ Adafruit_SSD1306& IoDevices::display() {
 
 bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
   ButtonTracker& tracker = buttonFor(button);
-  if (button == ButtonId::Test && testIrqFlag_) {
-    testIrqFlag_ = false;
-    tracker.lastRead = tracker.activeLevel;
-    tracker.lastChangeMs = nowMs;
-  }
-
   const bool reading = digitalRead(tracker.pin);
+
+  if (consumeButtonIrq(button) && (nowMs - tracker.lastPressEventMs) > config::timing::kButtonDebounceMs) {
+    tracker.lastPressEventMs = nowMs;
+    tracker.lastStable = tracker.activeLevel;
+    tracker.lastRead = reading;
+    tracker.lastChangeMs = nowMs;
+    return true;
+  }
 
   if (reading != tracker.lastRead) {
     tracker.lastRead = reading;
@@ -75,7 +86,11 @@ bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
 
   if ((nowMs - tracker.lastChangeMs) > config::timing::kButtonDebounceMs && reading != tracker.lastStable) {
     tracker.lastStable = reading;
-    return tracker.lastStable == tracker.activeLevel;
+    if (tracker.lastStable == tracker.activeLevel &&
+        (nowMs - tracker.lastPressEventMs) > config::timing::kButtonDebounceMs) {
+      tracker.lastPressEventMs = nowMs;
+      return true;
+    }
   }
 
   return false;
@@ -167,6 +182,21 @@ void IoDevices::initButton(ButtonTracker& button, int pin, uint32_t nowMs) {
   button.lastStable = reading;
   button.lastRead = reading;
   button.lastChangeMs = nowMs;
+  button.lastPressEventMs = 0;
+}
+
+bool IoDevices::consumeButtonIrq(ButtonId button) {
+  if (button == ButtonId::Test && testIrqFlag_) {
+    testIrqFlag_ = false;
+    return true;
+  }
+
+  if (button == ButtonId::Start && startIrqFlag_) {
+    startIrqFlag_ = false;
+    return true;
+  }
+
+  return false;
 }
 
 IoDevices::ButtonTracker& IoDevices::buttonFor(ButtonId button) {
