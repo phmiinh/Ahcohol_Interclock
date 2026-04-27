@@ -1,4 +1,4 @@
-﻿# Fine Tunning Review
+# Fine Tunning Review
 
 ## 1. Phạm Vi Review
 
