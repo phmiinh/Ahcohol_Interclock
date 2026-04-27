@@ -19,7 +19,7 @@ Các use case chính:
 | UC03 | PASS rồi START | Servo mở, state vào `RUNNING` |
 | UC04 | FAIL rồi không cho START | Servo giữ khóa, buzzer cảnh báo |
 | UC05 | Retest khi đang RUNNING | Đến hạn thì yêu cầu TEST lại |
-| UC06 | Retest timeout | Hệ thống vào `ERROR_LOCKED` |
+| UC06 | Retest timeout | Hệ thống vào `ERROR_LOCKED`, cho phép nhấn TEST để kiểm tra lại từ trạng thái khóa |
 | UC07 | Lỗi cảm biến/ngoại vi | Hệ thống vào safe state |
 
 ## 3. Yêu Cầu Chức Năng
@@ -35,7 +35,7 @@ Các use case chính:
 | FR07 | Điều khiển servo khóa/mở | `GPIO15`, góc 0/90 |
 | FR08 | OLED/LED/buzzer phản ánh trạng thái | Đã có |
 | FR09 | Retest định kỳ khi RUNNING | 60 giây demo, 30 phút production |
-| FR10 | Fault handling | OLED init fail, sensor timeout, retest timeout |
+| FR10 | Fault handling | OLED init fail, sensor timeout, retest timeout; riêng retest timeout có đường phục hồi bằng TEST |
 | FR11 | Log phục vụ kiểm thử | Serial log gọn |
 
 ## 4. Yêu Cầu Phi Chức Năng
@@ -245,6 +245,7 @@ Kết quả:
 - Retest PASS: quay lại `RUNNING`.
 - Retest FAIL: vào `FAIL_LOCKED`.
 - Không nhấn TEST trong grace window: vào `ERROR_LOCKED`.
+- Sau `RETEST_TIMEOUT`: START bị bỏ qua, TEST chạy sampling lại từ trạng thái khóa.
 
 ### 9.5. Test START Trên Phần Cứng Thật
 
@@ -323,7 +324,7 @@ Repo được coi là sẵn sàng demo khi:
 - FAIL không mở servo.
 - Retest sau 60 giây có buzzer nhắc.
 - Retest PASS/FAIL hoạt động đúng.
-- Không retest thì timeout vào `ERROR_LOCKED`.
+- Không retest thì timeout vào `ERROR_LOCKED`, sau đó TEST có thể chạy lại kiểm tra.
 - Serial log đủ gọn để copy vào báo cáo.
 
 ## 13. Việc Cần Làm Nếu Muốn Nâng Cấp

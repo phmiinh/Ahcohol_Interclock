@@ -122,6 +122,15 @@ void AlcoholInterlockController::update() {
       break;
 
     case SystemState::ErrorLocked:
+      if (fault_ == FaultCode::RetestTimeout) {
+        if (testPressed) {
+          telemetry_.logAction("TEST pressed after RETEST_TIMEOUT. Re-sampling from locked safe state");
+          fault_ = FaultCode::None;
+          startSampling(nowMs);
+        } else if (startPressed) {
+          telemetry_.logAction("START ignored after RETEST_TIMEOUT. Press TEST to verify again");
+        }
+      }
       break;
   }
 

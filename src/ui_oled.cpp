@@ -122,7 +122,7 @@ void OledUi::render(IoDevices& io, const AppSnapshot& snapshot) {
       display.setCursor(0, 40);
       display.println("Safe state active");
       display.setCursor(0, 52);
-      display.println("Vehicle locked");
+      display.println(snapshot.fault == FaultCode::RetestTimeout ? "Press TEST retry" : "Vehicle locked");
       break;
   }
 

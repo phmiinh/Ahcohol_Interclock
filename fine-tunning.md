@@ -48,6 +48,7 @@ Kết quả:
 RETEST_SAMPLING -> RUNNING      nếu PASS
 RETEST_SAMPLING -> FAIL_LOCKED  nếu FAIL
 RETEST_REQUIRED -> ERROR_LOCKED nếu timeout
+ERROR_LOCKED -> SAMPLING        nếu fault là RETEST_TIMEOUT và người dùng nhấn TEST
 ```
 
 ### Trạng thái hiện tại
@@ -56,6 +57,7 @@ RETEST_REQUIRED -> ERROR_LOCKED nếu timeout
 - Retest demo: `60 giây`.
 - Grace demo: `15 giây`.
 - Khi yêu cầu retest, servo vẫn mở, LED xanh + vàng bật, buzzer kêu nhắc.
+- Nếu quá grace window, hệ thống khóa vào `ERROR_LOCKED`; với riêng `RETEST_TIMEOUT`, người dùng có thể nhấn TEST để kiểm tra lại từ trạng thái khóa.
 
 ## 3. Mở Rộng Snapshot Và Telemetry
 

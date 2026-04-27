@@ -20,7 +20,7 @@ Dự án hiện ưu tiên ba mục tiêu:
 - Khi đang `RUNNING`, hệ thống yêu cầu retest định kỳ.
 - Nếu retest PASS thì tiếp tục chạy.
 - Nếu retest FAIL thì khóa lại.
-- Nếu đến hạn retest nhưng người dùng không kiểm tra lại trong grace window thì vào trạng thái lỗi an toàn.
+- Nếu đến hạn retest nhưng người dùng không kiểm tra lại trong grace window thì vào trạng thái lỗi an toàn; riêng lỗi này cho phép nhấn `TEST` để kiểm tra lại từ trạng thái khóa.
 - Log Serial gọn, tập trung vào trạng thái, hành động, kết quả và lỗi.
 - Dashboard realtime có sẵn nhưng đang tắt telemetry mặc định để Serial Monitor Wokwi dễ theo dõi.
 
@@ -56,6 +56,7 @@ Kết quả retest:
 RETEST_SAMPLING -> RUNNING      nếu PASS
 RETEST_SAMPLING -> FAIL_LOCKED  nếu FAIL
 RETEST_REQUIRED -> ERROR_LOCKED nếu timeout
+ERROR_LOCKED -> TEST -> SAMPLING nếu fault là RETEST_TIMEOUT
 ```
 
 ## Máy Trạng Thái
@@ -72,7 +73,7 @@ Firmware hiện có các trạng thái:
 | `RUNNING` | Servo đã mở khóa, hệ thống đang chạy |
 | `RETEST_REQUIRED` | Đến hạn kiểm tra lại khi đang chạy |
 | `RETEST_SAMPLING` | Đang lấy mẫu cho lần retest |
-| `ERROR_LOCKED` | Lỗi nghiêm trọng, xe khóa an toàn |
+| `ERROR_LOCKED` | Lỗi an toàn, xe khóa; `RETEST_TIMEOUT` có thể nhấn TEST để kiểm tra lại |
 
 ## Cấu Hình Quan Trọng
 
@@ -229,7 +230,7 @@ Lưu ý: firmware đang tắt `kEnableDashboardProtocol` mặc định để Ser
 11. Nhấn TEST để retest.
 12. Retest PASS thì tiếp tục RUNNING.
 13. Retest FAIL thì khóa lại.
-14. Không retest trong grace window thì vào `ERROR_LOCKED`.
+14. Không retest trong grace window thì vào `ERROR_LOCKED`; nhấn TEST để kiểm tra lại từ trạng thái khóa.
 
 ## Lưu Ý Khi Lắp Phần Cứng Thật
 
