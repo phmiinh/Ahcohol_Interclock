@@ -62,7 +62,7 @@ namespace timing {
 constexpr uint32_t kPreheatMs = features::kDemoMode ? 10000UL : 60000UL;
 // Sampling window for TEST/retest. Tune again if you move to a calibrated MQ3 setup.
 constexpr uint8_t kSampleCount = 20;
-constexpr uint32_t kSampleTotalMs = 10000UL;
+constexpr uint32_t kSampleTotalMs = 2000UL;
 constexpr uint32_t kSampleIntervalMs = kSampleCount > 1 ? (kSampleTotalMs / (kSampleCount - 1)) : kSampleTotalMs;
 // Rolling retest target is 30 minutes in production. Demo mode shortens it so the flow is testable in Wokwi.
 constexpr uint32_t kRetestProductionMs = 30UL * 60UL * 1000UL;

@@ -1,4 +1,4 @@
-# Fine Tunning Review
+﻿# Fine Tunning Review
 
 ## 1. Phạm Vi Review
 
@@ -15,7 +15,7 @@ Mốc hiện tại:
 - Firmware đã có luồng retest.
 - Serial log đã được giảm nhiễu.
 - START đã đọc ổn định hơn trên Wokwi và phần cứng thật.
-- Sampling test đã tăng lên khoảng `10 giây`.
+- Sampling test đã được chốt lại ở khoảng `2 giây` cho demo và phần cứng thật.
 - Luồng `PASS_READY` đã được bảo vệ để không tự nhảy sang `RUNNING` nếu START đang bị giữ hoặc bị active sẵn.
 
 ## 2. Thay Đổi Chính Theo Nhóm Chức Năng
@@ -190,15 +190,15 @@ Hành vi hiện tại:
 - Servo giữ ở góc mở.
 - Muốn khóa lại, người dùng phải bấm START lần nữa sau guard window.
 
-### 2.8. Tăng Thời Gian Sampling Lên 10 Giây
+### 2.8. Chốt Thời Gian Sampling 2 Giây
 
 Yêu cầu mới:
 
-- Test lấy mẫu khoảng `10 giây` thời gian thực.
+- Sau khi thử `10 giây`, thời gian sampling được giảm xuống `2 giây` vì 10 giây làm demo chậm và không cần thiết cho prototype hiện tại.
 
 Điều chỉnh:
 
-- `kSampleTotalMs` đổi từ `1000 ms` sang `10000 ms`.
+- `kSampleTotalMs` hiện được chốt là `2000 ms`.
 - `kSampleCount` giữ là `20`.
 - `kSampleIntervalMs` tự tính lại theo công thức:
 
@@ -208,15 +208,15 @@ kSampleIntervalMs = kSampleTotalMs / (kSampleCount - 1)
 
 Kết quả:
 
-- 20 mẫu được lấy trong khoảng 10 giây.
-- Mỗi mẫu cách nhau khoảng `526 ms`.
-- Log `Sampling finished in ... ms` sẽ xấp xỉ 10 giây, có thể lệch nhẹ do loop/UI/Serial overhead.
+- 20 mẫu được lấy trong khoảng 2 giây.
+- Mỗi mẫu cách nhau khoảng `105 ms`.
+- Log `Sampling finished in ... ms` sẽ xấp xỉ 2 giây, có thể lệch nhẹ do loop/UI/Serial overhead.
 
 Ý nghĩa:
 
-- Hành vi giống quá trình đo thật hơn.
-- Người dùng có thời gian thổi/ổn định cảm biến lâu hơn.
-- Metric `test_to_result_ms` trong báo cáo phải cập nhật theo mốc mới, không còn là khoảng 1 giây.
+- Demo nhanh hơn nhưng vẫn có đủ nhiều mẫu để lọc nhiễu cơ bản.
+- Không kéo dài flow demo quá mức.
+- Metric `test_to_result_ms` trong báo cáo phải cập nhật theo mốc mới, khoảng 2 giây.
 
 ### 2.9. Bảo Vệ PASS_READY Không Tự Nhảy RUNNING
 
@@ -294,8 +294,8 @@ RETEST_TIMEOUT   -> ERROR_LOCKED
 | `kDemoMode` | `true` | Dùng timing demo Wokwi |
 | `kPreheatMs` | `10000 ms` | Preheat demo 10 giây |
 | `kSampleCount` | `20` | Số mẫu mỗi lần test |
-| `kSampleTotalMs` | `10000 ms` | Tổng thời gian sampling |
-| `kSampleIntervalMs` | khoảng `526 ms` | Khoảng cách giữa 2 mẫu |
+| `kSampleTotalMs` | `2000 ms` | Tổng thời gian sampling |
+| `kSampleIntervalMs` | khoảng `105 ms` | Khoảng cách giữa 2 mẫu |
 | `kRetestDemoMs` | `30000 ms` | Retest sau 30 giây trong demo |
 | `kRetestProductionMs` | `1800000 ms` | Retest sau 30 phút trong production |
 | `kRetestGraceMs` | `15000 ms` ở demo | Thời gian chờ người dùng retest |
@@ -372,7 +372,7 @@ Với MQ3 thật:
 - Boot vào `PREHEAT`.
 - Sau 10 giây vào `STANDBY_LOCKED`.
 - Nhấn TEST, OLED vào `SAMPLING`.
-- Sampling kéo dài khoảng 10 giây.
+- Sampling kéo dài khoảng 2 giây.
 - PASS thì vào `PASS_READY`, OLED hiện yêu cầu START.
 - Nhấn START, log có `START accepted`.
 - Servo giữ ở góc mở, state là `RUNNING`.
@@ -403,7 +403,7 @@ Các thay đổi từ lúc thêm retest 30 phút đến hiện tại đã đưa 
 - Có START interrupt và sửa wiring Wokwi đúng GPIO16/RX2.
 - Có guard chống START bị tính hai lần.
 - Có bảo vệ `PASS_READY` để không tự nhảy `RUNNING` khi START đang active sẵn.
-- Có sampling window 10 giây gần với thao tác đo thật hơn.
+- Có sampling window 2 giây, cân bằng giữa độ ổn định mẫu và tốc độ demo.
 
 Rủi ro còn lại chủ yếu nằm ở phần cứng thật:
 
@@ -413,3 +413,4 @@ Rủi ro còn lại chủ yếu nằm ở phần cứng thật:
 - MQ3 chưa được hiệu chuẩn threshold và warm-up đúng thực tế.
 
 Về logic firmware, luồng `PASS_READY -> START -> RUNNING` hiện đã được bảo vệ tốt hơn và phù hợp hơn với yêu cầu interlock: kết quả PASS chỉ cấp quyền START, không tự mở khóa.
+
