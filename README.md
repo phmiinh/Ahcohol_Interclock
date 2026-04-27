@@ -134,7 +134,7 @@ Triệu chứng cấu hình sai polarity:
 - PASS sau khi test: kêu một tiếng ngắn.
 - START hợp lệ từ `PASS_READY`: kêu một tiếng ngắn.
 - FAIL: buzzer cảnh báo theo chu kỳ.
-- `RETEST_REQUIRED`: buzzer kêu ngắn theo chu kỳ để nhắc người dùng nhấn TEST lại.
+- `RETEST_REQUIRED`: buzzer dùng cùng pattern cảnh báo với FAIL và kêu lặp liên tục cho tới khi người dùng nhấn TEST, nhấn START để khóa lại, hoặc hết grace window.
 - ERROR: hệ thống khóa an toàn, buzzer không spam liên tục.
 
 ## Cấu Trúc Repo

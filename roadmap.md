@@ -237,7 +237,7 @@ Thao tác:
 2. Hệ thống vào `RUNNING`.
 3. Chờ 60 giây trong demo.
 4. Quan sát state `RETEST_REQUIRED`.
-5. Buzzer phải kêu nhắc retest.
+5. Buzzer phải kêu lặp liên tục theo pattern FAIL để nhắc retest.
 6. Nhấn TEST.
 
 Kết quả:
@@ -322,7 +322,7 @@ Repo được coi là sẵn sàng demo khi:
 - Wokwi chạy được từ `diagram.json`.
 - PASS rồi START mở servo ổn định.
 - FAIL không mở servo.
-- Retest sau 60 giây có buzzer nhắc.
+- Retest sau 60 giây có buzzer nhắc liên tục theo pattern FAIL.
 - Retest PASS/FAIL hoạt động đúng.
 - Không retest thì timeout vào `ERROR_LOCKED`, sau đó TEST có thể chạy lại kiểm tra.
 - Serial log đủ gọn để copy vào báo cáo.

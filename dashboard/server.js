@@ -69,8 +69,8 @@ function createEmptyTelemetry() {
     buzzerOn: false,
     servoAngle: 0,
     buttonMode: "module_3pin",
-    buttonActiveHigh: true,
-    buttonBias: "internal_pulldown",
+    buttonActiveHigh: false,
+    buttonBias: "internal_pullup",
     sensorWarningDurationMs: 0,
     sampleCount: 0,
     sampleTotal: 20,
@@ -434,8 +434,8 @@ function startMockStream() {
       buzzerOn,
       servoAngle,
       buttonMode: "module_3pin",
-      buttonActiveHigh: true,
-      buttonBias: "internal_pulldown",
+      buttonActiveHigh: false,
+      buttonBias: "internal_pullup",
       sensorWarningDurationMs: 0,
       sampleCount:
         state === "PASS_READY" || state === "RUNNING" || state === "RETEST_SAMPLING" || state === "FAIL_LOCKED"
