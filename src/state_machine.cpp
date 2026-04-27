@@ -82,10 +82,16 @@ void AlcoholInterlockController::update() {
         lastPassReadyToUnlockMs_ = passReadyEnteredAtMs_ > 0 ? (startPressedAtMs - passReadyEnteredAtMs_) : 0;
         telemetry_.logAction("START accepted. Vehicle unlocked");
         transitionTo(SystemState::Running);
+        passBeep_.active = true;
+        passBeep_.startedAtMs = nowMs;
+        passBeep_.durationMs = config::timing::kPassBeepMs;
+        io_.setBuzzer(true);
         lastStartToUnlockMs_ = millis() - startPressedAtMs;
         const AppSnapshot runningSnapshot = snapshot(millis());
         telemetry_.logStartUnlockMetrics(runningSnapshot);
         telemetry_.emitDashboardEvent("start_unlocked", "success", "START accepted. Servo unlocked", runningSnapshot);
+      } else if (startPressed) {
+        telemetry_.logAction("START ignored. Release START once after PASS_READY, then press again");
       } else if (testPressed) {
         telemetry_.logAction("TEST pressed. Re-sampling");
         startSampling(nowMs);
@@ -145,6 +151,9 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
     passReadyEnteredAtMs_ = transitionStartedAtMs;
     io_.clearButtonEvent(ButtonId::Start, transitionStartedAtMs);
     startReleasedAfterPassReady_ = !io_.buttonActive(ButtonId::Start);
+    telemetry_.logAction(
+        startReleasedAfterPassReady_ ? "PASS_READY armed. START is released"
+                                     : "PASS_READY waiting. START is already active");
   } else if (state_ != SystemState::Running) {
     passReadyEnteredAtMs_ = 0;
     startReleasedAfterPassReady_ = false;
@@ -426,7 +435,9 @@ void AlcoholInterlockController::updateFailBuzzer(uint32_t nowMs) {
 }
 
 void AlcoholInterlockController::updateRetestBuzzer(uint32_t nowMs) {
-  const uint32_t phase = nowMs % config::timing::kRetestBuzzerPeriodMs;
+  const uint32_t elapsedMs =
+      retestRequiredAtMs_ > 0 && nowMs >= retestRequiredAtMs_ ? (nowMs - retestRequiredAtMs_) : 0;
+  const uint32_t phase = elapsedMs % config::timing::kRetestBuzzerPeriodMs;
   io_.setBuzzer(phase < config::timing::kRetestBuzzerOnMs);
 }
 

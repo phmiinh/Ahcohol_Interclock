@@ -1,62 +1,67 @@
-# Fine Tunning Review
+# Fine-tuning Sau Khi Bổ Sung Retest
 
-## 1. Phạm Vi Review
+## 1. Mục Tiêu
 
-Tài liệu này tổng hợp các thay đổi đã thực hiện từ thời điểm bổ sung cơ chế retest định kỳ khi hệ thống đang chạy đến trạng thái hiện tại của firmware.
+Tài liệu này ghi lại các lần tinh chỉnh quan trọng sau khi bổ sung cơ chế retest định kỳ cho Alcohol Interlock System. Nội dung tập trung vào lý do thay đổi, vấn đề đã gặp và trạng thái cuối cùng của firmware.
 
-Mốc bắt đầu:
+Phạm vi bắt đầu từ lúc thêm yêu cầu:
 
-- Thêm yêu cầu: sau khi `PASS -> START -> RUNNING`, hệ thống phải yêu cầu kiểm tra lại theo chu kỳ.
-- Mục tiêu production: retest mỗi `30 phút`.
-- Mục tiêu demo Wokwi: rút xuống `30 giây` để có thể quan sát trong buổi demo.
+```text
+Sau khi PASS và START, hệ thống đang RUNNING phải yêu cầu TEST lại theo chu kỳ.
+```
 
-Mốc hiện tại:
+Trạng thái hiện tại:
 
-- Firmware đã có luồng retest.
-- Serial log đã được giảm nhiễu.
-- START đã đọc ổn định hơn trên Wokwi và phần cứng thật.
-- Sampling test đã được chốt lại ở khoảng `2 giây` cho demo và phần cứng thật.
-- Luồng `PASS_READY` đã được bảo vệ để không tự nhảy sang `RUNNING` nếu START đang bị giữ hoặc bị active sẵn.
+- Production retest: 30 phút một lần.
+- Demo retest: 60 giây một lần.
+- Sampling: 20 mẫu trong khoảng 2 giây.
+- Nút TEST/START: active-LOW, interrupt flag + debounce.
+- START sau PASS được bảo vệ để không tự chạy nếu tín hiệu START đang active sẵn.
+- Buzzer phản hồi cho PASS, START và yêu cầu retest.
 
-## 2. Thay Đổi Chính Theo Nhóm Chức Năng
+## 2. Thêm Cơ Chế Retest Định Kỳ
 
-### 2.1. Bổ Sung Periodic Retest Khi Đang RUNNING
+### Vấn đề cần giải quyết
 
-Các trạng thái mới đã được thêm vào FSM:
+Phiên bản đầu chỉ kiểm tra trước khi START. Điều này đủ cho demo cơ bản nhưng chưa phản ánh đúng ý tưởng alcohol interlock thực tế, vì người dùng có thể cần kiểm tra lại trong quá trình vận hành.
+
+### Thay đổi đã thực hiện
+
+Thêm các trạng thái phục vụ retest:
 
 - `RETEST_REQUIRED`
 - `RETEST_SAMPLING`
-- `ERROR_LOCKED` với fault `RETEST_TIMEOUT`
 
-Luồng nghiệp vụ hiện tại:
+Thêm fault code liên quan:
 
-1. Người dùng TEST đạt PASS.
-2. Hệ thống vào `PASS_READY`.
-3. Người dùng nhấn START.
-4. Hệ thống mở servo và vào `RUNNING`.
-5. Firmware bắt đầu đếm timer retest.
-6. Khi đến hạn, hệ thống chuyển sang `RETEST_REQUIRED`.
-7. Servo vẫn mở, LED xanh + vàng bật, buzzer nhắc.
-8. Người dùng nhấn TEST để vào `RETEST_SAMPLING`.
-9. Retest PASS thì quay lại `RUNNING` và lập lịch chu kỳ mới.
-10. Retest FAIL thì chuyển `FAIL_LOCKED`.
-11. Nếu quá grace window mà không retest thì vào `ERROR_LOCKED` với fault `RETEST_TIMEOUT`.
+- `RETEST_TIMEOUT`, được hiển thị như lỗi và đưa hệ thống về `ERROR_LOCKED`
 
-Thông số hiện tại:
+Luồng mới:
 
-- Production interval: `30 * 60 * 1000 ms`.
-- Demo interval: `30 * 1000 ms`.
-- Production grace: `5 phút`.
-- Demo grace: `15 giây`.
+```text
+RUNNING -> RETEST_REQUIRED -> RETEST_SAMPLING
+```
 
-Ý nghĩa kỹ thuật:
+Kết quả:
 
-- Tính năng này làm hệ thống gần với alcohol interlock thực tế hơn, vì không chỉ kiểm tra trước khi khởi động mà còn có kiểm tra lại khi đang vận hành.
-- Servo vẫn mở trong `RETEST_REQUIRED` và `RETEST_SAMPLING`, tránh hành vi khóa đột ngột ngay khi vừa đến hạn retest.
+```text
+RETEST_SAMPLING -> RUNNING      nếu PASS
+RETEST_SAMPLING -> FAIL_LOCKED  nếu FAIL
+RETEST_REQUIRED -> ERROR_LOCKED nếu timeout
+```
 
-### 2.2. Mở Rộng Telemetry Cho Retest
+### Trạng thái hiện tại
 
-Telemetry `AI_JSON` và snapshot đã có thêm các trường:
+- Retest production: `30 phút`.
+- Retest demo: `60 giây`.
+- Grace demo: `15 giây`.
+- Khi yêu cầu retest, servo vẫn mở, LED xanh + vàng bật, buzzer kêu nhắc.
+
+## 3. Mở Rộng Snapshot Và Telemetry
+
+### Thay đổi
+
+Snapshot được bổ sung các trường retest:
 
 - `retestRequired`
 - `retestIntervalMs`
@@ -68,349 +73,275 @@ Telemetry `AI_JSON` và snapshot đã có thêm các trường:
 - `runningSessionMs`
 - `retestCycleCount`
 
-Các metric này phục vụ báo cáo và dashboard:
+### Mục đích
 
-- `retestRemainingMs`: còn bao lâu tới lần retest tiếp theo.
-- `retestDueToTestMs`: người dùng mất bao lâu từ lúc được yêu cầu retest đến lúc nhấn TEST.
-- `retestToResultMs`: thời gian từ lúc nhấn TEST trong retest đến khi có PASS/FAIL.
-- `retestCycleCount`: số chu kỳ retest đã phát sinh trong một phiên RUNNING.
+- Có dữ liệu để viết báo cáo.
+- Có thể hiển thị countdown retest trên OLED/dashboard.
+- Đo được phản ứng của người dùng sau khi hệ thống yêu cầu retest.
 
-### 2.3. Giảm Spam Log Serial
+## 4. Giảm Nhiễu Serial Log
 
-Vấn đề gặp phải:
+### Vấn đề
 
-- Serial Monitor bị tràn bởi live ADC debug và `AI_JSON` định kỳ.
-- Khi demo Wokwi, log quá nhiều làm khó theo dõi state machine.
+Sau khi thêm telemetry, Serial Monitor bị spam bởi:
 
-Điều chỉnh đã thực hiện:
+- Live ADC debug.
+- `AI_JSON` định kỳ.
+- Log từng mẫu sampling.
 
-- Tắt mặc định `kEnableSensorDebug`.
-- Tắt mặc định `kEnableDashboardProtocol`.
-- Thêm `kEnableSampleProgressLog` và tắt mặc định.
+Điều này làm khó theo dõi demo.
 
-Hành vi log hiện tại:
+### Thay đổi
 
-- Vẫn log boot.
-- Vẫn log state transition.
-- Vẫn log action như TEST/START.
-- Vẫn log kết quả sampling.
-- Vẫn log warning/fault quan trọng.
-- Không còn bắn live ADC và `AI_JSON` liên tục trong Wokwi Serial Monitor.
-
-Lưu ý:
-
-- Nếu cần dashboard realtime với ESP32 thật, bật lại `kEnableDashboardProtocol = true`.
-- Nếu cần debug từng mẫu ADC, bật lại `kEnableSampleProgressLog = true`.
-
-### 2.4. Điều Chỉnh SENSOR_TIMEOUT Cho Demo Wokwi
-
-Vấn đề gặp phải:
-
-- Khi vặn potentiometer sát `0` hoặc `4095`, toàn bộ sampling có thể nằm sát rail ADC.
-- Firmware cũ coi đây là lỗi cứng `SENSOR_TIMEOUT`, dẫn tới `ERROR_LOCKED`.
-- Trong Wokwi, vặn hết cỡ là thao tác demo bình thường, không nhất thiết là lỗi wiring.
-
-Điều chỉnh đã thực hiện:
-
-- Thêm cấu hình `kFaultOnAllRailSamples`.
-- Trong `kDemoMode = true`, rail-saturated sampling chỉ log warning và vẫn cho PASS/FAIL.
-- Khi production, có thể bật strict fail-safe để rail-saturated sampling vào fault.
-
-Ý nghĩa:
-
-- Demo dễ chạy hơn.
-- Vẫn giữ được hướng fail-safe cho phần cứng thật.
-
-### 2.5. Sửa Nút START Không Ăn Trên Wokwi
-
-Vấn đề gặp phải:
-
-- Sau khi PASS, nhấn START không có log.
-- Không có dòng `ACTION: START accepted. Vehicle unlocked`.
-- Servo không chạy vì firmware không nhận START.
-
-Nguyên nhân chính:
-
-- Firmware dùng GPIO16.
-- Trên Wokwi board `esp32-devkit-v1`, chân GPIO16 được label là `RX2`, không phải `D16`.
-- `diagram.json` trước đó nối START vào `esp:D16`, nên tín hiệu có khả năng không vào đúng chân MCU.
-
-Điều chỉnh đã thực hiện:
-
-- Sửa wiring START trong `diagram.json` sang `esp:RX2`.
-- Giữ firmware ở `kButtonStart = 16`.
-
-Kết quả mong đợi:
-
-- Sau `PASS_READY`, nhấn START sẽ sinh log:
-
-```text
-ACTION: START accepted. Vehicle unlocked
-STATE: Transition -> RUNNING | locked=false ...
-```
-
-### 2.6. Thêm Interrupt Cho START
-
-Ban đầu:
-
-- TEST có interrupt.
-- START chủ yếu dựa vào polling/debounce.
-
-Vấn đề:
-
-- Click ngắn trong Wokwi hoặc nhiễu thao tác có thể bị bỏ lỡ.
-
-Điều chỉnh:
-
-- Thêm `onStartButtonIsr()`.
-- Thêm `startIrqFlag_`.
-- START và TEST cùng dùng mô hình interrupt flag + software debounce.
-
-Ý nghĩa:
-
-- START nhạy và ổn định hơn.
-- ISR vẫn chỉ set flag, logic nghiệp vụ vẫn xử lý ở `loop()`, đúng hướng an toàn cho embedded.
-
-### 2.7. Chống START Bị Tính Hai Lần Sau Khi Unlock
-
-Vấn đề gặp phải:
-
-- Nhấn START sau PASS làm servo/barie chỉ gạt một cái rồi quay lại.
-- Nguyên nhân hợp lý: cùng một lần bấm START có thể bị nhận thêm một edge sau khi đã vào `RUNNING`.
-- Firmware khi ở `RUNNING` có flow phụ: bấm START lần nữa để quay về `STANDBY_LOCKED`.
-
-Điều chỉnh:
-
-- Thêm `kRunningStartRelockGuardMs = 800`.
-- Trong 800 ms đầu sau khi vào `RUNNING`, START không được dùng để relock.
-
-Hành vi hiện tại:
-
-- START tại `PASS_READY` mở khóa ngay.
-- Servo giữ ở góc mở.
-- Muốn khóa lại, người dùng phải bấm START lần nữa sau guard window.
-
-### 2.8. Chốt Thời Gian Sampling 2 Giây
-
-Yêu cầu mới:
-
-- Sau khi thử `10 giây`, thời gian sampling được giảm xuống `2 giây` vì 10 giây làm demo chậm và không cần thiết cho prototype hiện tại.
-
-Điều chỉnh:
-
-- `kSampleTotalMs` hiện được chốt là `2000 ms`.
-- `kSampleCount` giữ là `20`.
-- `kSampleIntervalMs` tự tính lại theo công thức:
+Tắt mặc định:
 
 ```cpp
-kSampleIntervalMs = kSampleTotalMs / (kSampleCount - 1)
+kEnableSensorDebug = false
+kEnableDashboardProtocol = false
+kEnableSampleProgressLog = false
 ```
 
-Kết quả:
+### Kết quả
 
-- 20 mẫu được lấy trong khoảng 2 giây.
-- Mỗi mẫu cách nhau khoảng `105 ms`.
-- Log `Sampling finished in ... ms` sẽ xấp xỉ 2 giây, có thể lệch nhẹ do loop/UI/Serial overhead.
+Serial Monitor hiện chủ yếu còn:
 
-Ý nghĩa:
+- Boot log.
+- State transition.
+- Action như TEST/START.
+- Sampling result.
+- Metric quan trọng.
+- Warning/fault.
 
-- Demo nhanh hơn nhưng vẫn có đủ nhiều mẫu để lọc nhiễu cơ bản.
-- Không kéo dài flow demo quá mức.
-- Metric `test_to_result_ms` trong báo cáo phải cập nhật theo mốc mới, khoảng 2 giây.
+## 5. Điều Chỉnh SENSOR_TIMEOUT Cho Wokwi
 
-### 2.9. Bảo Vệ PASS_READY Không Tự Nhảy RUNNING
+### Vấn đề
 
-Vấn đề phần cứng thật:
+Trong Wokwi, người dùng thường vặn potentiometer sát 0 hoặc 4095. Firmware cũ coi toàn bộ mẫu sát rail là lỗi cảm biến cứng và vào `SENSOR_TIMEOUT`.
 
-- Sau khi test PASS, hệ thống có thể nhảy thẳng sang màn hình `RUNNING`.
-- Người dùng gần như không có cơ hội nhấn START.
+### Thay đổi
 
-Phân tích:
+Thêm:
 
-- Trong source, `SAMPLING` sau PASS chỉ chuyển sang `PASS_READY`, không tự chuyển sang `RUNNING`.
-- Nếu nhảy sang `RUNNING`, nghĩa là firmware đã nhận `startPressed = true` ngay sau khi vào `PASS_READY`.
-- Nguyên nhân có thể là:
-  - START đang bị giữ từ trước.
-  - START bị float.
-  - Module nút START active-HIGH nhưng firmware cấu hình active-LOW, hoặc ngược lại.
-  - Dây hoặc bias phần cứng làm GPIO16 luôn active.
-  - Interrupt START còn pending khi chuyển state.
+```cpp
+kFaultOnAllRailSamples = !kDemoMode
+```
 
-Điều chỉnh đã thực hiện:
+### Kết quả
 
-- Thêm hàm `buttonActive(ButtonId button)` để đọc trạng thái hiện tại của nút.
-- Thêm cờ `startReleasedAfterPassReady_`.
-- Khi vừa vào `PASS_READY`, firmware kiểm tra START có đang nhả không.
-- `PASS_READY` chỉ chấp nhận START nếu đã thấy nút START nhả ra ít nhất một lần sau khi vào state này.
+- Demo mode: rail ADC chỉ log warning, vẫn cho PASS/FAIL.
+- Production mode: có thể giữ hành vi fail-safe nghiêm ngặt.
 
-Hành vi mong muốn:
+## 6. Sửa Nút START Trong Wokwi
 
-- Nếu START đang active sẵn lúc vừa PASS, hệ thống vẫn đứng ở `PASS_READY`.
-- Người dùng phải nhả START rồi bấm lại để vào `RUNNING`.
-- Điều này làm flow an toàn hơn cho phần cứng thật.
+### Vấn đề
 
-## 3. Trạng Thái FSM Hiện Tại
+Sau PASS, nhấn START không có log, servo không chạy.
 
-Luồng chính:
+### Nguyên nhân
+
+Firmware dùng GPIO16, nhưng trên `wokwi-esp32-devkit-v1`, chân này được ghi là `RX2`. Wiring cũ nối START vào `D16`, gây khả năng tín hiệu không vào đúng chân.
+
+### Thay đổi
+
+Trong `diagram.json`, START được nối vào:
 
 ```text
-PREHEAT
-  -> STANDBY_LOCKED
-  -> SAMPLING
-  -> PASS_READY
-  -> RUNNING
+esp:RX2
 ```
 
-Luồng FAIL:
+Firmware vẫn giữ:
 
-```text
-SAMPLING
-  -> FAIL_LOCKED
+```cpp
+kButtonStart = 16
 ```
 
-Luồng retest:
+## 7. Chuyển TEST/START Sang Active-LOW
 
-```text
-RUNNING
-  -> RETEST_REQUIRED
-  -> RETEST_SAMPLING
-  -> RUNNING      nếu PASS
-  -> FAIL_LOCKED  nếu FAIL
-  -> ERROR_LOCKED nếu timeout
-```
+### Vấn đề
 
-Luồng lỗi:
+Khi lắp phần cứng thật, nút TEST chỉ hoạt động nếu `kActiveHigh = false`.
 
-```text
-OLED_INIT_FAILED -> ERROR_LOCKED
-SENSOR_TIMEOUT   -> ERROR_LOCKED nếu strict rail fault bật
-RETEST_TIMEOUT   -> ERROR_LOCKED
-```
+### Phân tích
 
-## 4. Các Thông Số Cấu Hình Quan Trọng Hiện Tại
+Module nút thật đang hoạt động theo kiểu active-LOW:
 
-| Tham số | Giá trị hiện tại | Ý nghĩa |
-|---|---:|---|
-| `kDemoMode` | `true` | Dùng timing demo Wokwi |
-| `kPreheatMs` | `10000 ms` | Preheat demo 10 giây |
-| `kSampleCount` | `20` | Số mẫu mỗi lần test |
-| `kSampleTotalMs` | `2000 ms` | Tổng thời gian sampling |
-| `kSampleIntervalMs` | khoảng `105 ms` | Khoảng cách giữa 2 mẫu |
-| `kRetestDemoMs` | `30000 ms` | Retest sau 30 giây trong demo |
-| `kRetestProductionMs` | `1800000 ms` | Retest sau 30 phút trong production |
-| `kRetestGraceMs` | `15000 ms` ở demo | Thời gian chờ người dùng retest |
-| `kButtonDebounceMs` | `60 ms` | Debounce phần mềm |
-| `kRunningStartRelockGuardMs` | `800 ms` | Chặn START bị tính hai lần sau unlock |
-| `kEnableSensorDebug` | `false` | Không spam ADC log |
-| `kEnableDashboardProtocol` | `false` | Không spam AI_JSON trong Wokwi |
-| `kEnableSampleProgressLog` | `false` | Không log từng mẫu |
+- Không nhấn: HIGH.
+- Nhấn: LOW.
 
-## 5. Điểm Cần Lưu Ý Khi Lắp Phần Cứng Thật
+Nếu firmware để active-HIGH, hệ thống sẽ đọc sai mức nhấn.
 
-### 5.1. Polarity Của Nút
-
-Firmware hiện giả định:
+### Thay đổi
 
 ```cpp
 kActiveHigh = false
 ```
 
-Nghĩa là:
+Wokwi cũng được sửa sang mô hình:
 
-- Idle: HIGH.
-- Nhấn: LOW.
-- Nên có pullup ổn định.
+- Pullup 10k.
+- Nhấn nút kéo tín hiệu xuống GND.
 
-Nếu module nút thực tế của bạn là active-HIGH:
+## 8. Thêm Interrupt Cho START
 
-- Idle: LOW.
-- Nhấn: HIGH.
+### Vấn đề
 
-Khi đó phải đổi:
+TEST đã dùng interrupt, START ban đầu vẫn phụ thuộc nhiều vào polling. Click ngắn hoặc nhiễu trên Wokwi/phần cứng có thể bị bỏ lỡ.
+
+### Thay đổi
+
+Thêm:
+
+- `onStartButtonIsr()`
+- `startIrqFlag_`
+- `clearButtonEvent()`
+
+Nguyên tắc vẫn giữ:
+
+- ISR chỉ set flag.
+- Debounce và nghiệp vụ chạy trong vòng `loop()`.
+
+## 9. Bảo Vệ PASS_READY
+
+### Vấn đề
+
+Trên phần cứng thật có tình huống sampling PASS xong hệ thống nhảy thẳng sang `RUNNING`, không có thời gian chờ người dùng nhấn START.
+
+### Nguyên nhân hợp lý
+
+START có thể đang active hoặc còn event pending ngay khi vừa chuyển sang `PASS_READY`.
+
+### Thay đổi
+
+Khi vào `PASS_READY`:
+
+- Clear event START cũ.
+- Kiểm tra START đang nhả hay đang active.
+- Chỉ chấp nhận START nếu đã thấy START nhả ra sau khi vào `PASS_READY`.
+
+Biến bảo vệ:
 
 ```cpp
-kActiveHigh = true
+startReleasedAfterPassReady_
 ```
 
-Nếu cấu hình sai polarity, firmware có thể không nhận TEST/START hoặc hiểu nhầm START đang được nhấn ngay khi vừa PASS.
+### Kết quả
 
-### 5.2. Bias Cho START Và TEST
+- PASS chỉ cấp quyền START.
+- Firmware không tự mở khóa nếu START đang active sẵn.
+- Người dùng phải nhả START rồi nhấn lại để vào `RUNNING`.
 
-Nếu dùng nút rời:
+## 10. Chống START Bị Tính Hai Lần
 
-- Active-HIGH: cần pulldown.
-- Active-LOW: cần pullup.
+### Vấn đề
 
-Firmware đang bật internal bias theo cấu hình, nhưng với dây dài hoặc module ngoài, vẫn nên có bias phần cứng rõ ràng.
+Sau khi nhấn START, servo có thể gạt mở rồi lập tức quay về khóa.
 
-### 5.3. Servo
+### Nguyên nhân
 
-Servo nên có nguồn riêng đủ dòng và chung GND với ESP32.
+Cùng một lần bấm START có thể bị nhận thêm một event sau khi hệ thống đã vào `RUNNING`. Trong `RUNNING`, START có chức năng phụ là khóa lại về `STANDBY_LOCKED`.
 
-Triệu chứng nguồn servo yếu:
+### Thay đổi
 
-- Servo giật nhẹ rồi quay lại.
-- ESP32 reset bất thường.
-- OLED chớp hoặc mất hiển thị.
-- Serial có boot log lại từ đầu.
+Thêm guard:
 
-### 5.4. MQ3 Thật Khác Potentiometer
+```cpp
+kRunningStartRelockGuardMs = 800
+```
 
-Wokwi dùng potentiometer để giả lập ADC.
+### Kết quả
 
-Với MQ3 thật:
+- START ở `PASS_READY` mở khóa.
+- Trong 800 ms đầu sau khi vào `RUNNING`, START không thể relock.
+- Muốn khóa lại, người dùng phải nhấn START lần nữa sau guard window.
 
-- Cần warm-up dài hơn 10 giây.
-- Cần hiệu chuẩn threshold.
-- Cần bảo đảm analog output không vượt mức an toàn của GPIO34.
-- Cần test nhiễu và độ ổn định bằng `sampleStdDev`.
+## 11. Tinh Chỉnh Sampling
 
-## 6. Checklist Xác Minh Sau Các Thay Đổi
+### Diễn biến
 
-### 6.1. Wokwi
+Sampling từng được tăng lên 10 giây để thử giống quá trình đo thật hơn. Sau đó giảm lại vì quá dài cho demo và không cần thiết với prototype hiện tại.
 
-- Boot vào `PREHEAT`.
-- Sau 10 giây vào `STANDBY_LOCKED`.
-- Nhấn TEST, OLED vào `SAMPLING`.
-- Sampling kéo dài khoảng 2 giây.
-- PASS thì vào `PASS_READY`, OLED hiện yêu cầu START.
-- Nhấn START, log có `START accepted`.
-- Servo giữ ở góc mở, state là `RUNNING`.
-- Sau 30 giây demo, state vào `RETEST_REQUIRED`.
-- Nhấn TEST để retest.
-- Retest PASS quay lại `RUNNING`.
-- Retest FAIL vào `FAIL_LOCKED`.
-- Không nhấn TEST trong grace window thì vào `ERROR_LOCKED` với `RETEST_TIMEOUT`.
+### Trạng thái hiện tại
 
-### 6.2. Phần Cứng Thật
+```cpp
+kSampleCount = 20
+kSampleTotalMs = 2000
+```
 
-- Đo điện áp chân START khi không nhấn.
-- Đo điện áp chân START khi nhấn.
-- Xác nhận polarity khớp `kActiveHigh`.
-- Xác nhận servo không làm ESP32 reset.
-- Xác nhận sau PASS hệ thống đứng ở `PASS_READY`, không tự mở khóa.
-- Chỉ sau khi nhấn START mới vào `RUNNING`.
+Kết quả:
 
-## 7. Kết Luận Review
+- 20 mẫu trong khoảng 2 giây.
+- Mỗi mẫu cách nhau khoảng 105 ms.
+- Demo nhanh hơn nhưng vẫn đủ dữ liệu để tính trung bình và độ lệch chuẩn.
 
-Các thay đổi từ lúc thêm retest 30 phút đến hiện tại đã đưa firmware từ một demo PASS/FAIL đơn giản thành một FSM thực tế hơn:
+## 12. Buzzer Sau Các Lần Tinh Chỉnh
 
-- Có retest định kỳ khi đang chạy.
-- Có grace window và fault timeout.
-- Có telemetry phục vụ báo cáo.
-- Có log gọn hơn cho demo.
-- Có xử lý riêng cho Wokwi và production đối với rail ADC.
-- Có START interrupt và sửa wiring Wokwi đúng GPIO16/RX2.
-- Có guard chống START bị tính hai lần.
-- Có bảo vệ `PASS_READY` để không tự nhảy `RUNNING` khi START đang active sẵn.
-- Có sampling window 2 giây, cân bằng giữa độ ổn định mẫu và tốc độ demo.
+### PASS
 
-Rủi ro còn lại chủ yếu nằm ở phần cứng thật:
+Khi test PASS, buzzer kêu một tiếng ngắn.
 
-- Polarity module nút không khớp cấu hình.
-- Bias input chưa đủ ổn định.
-- Nguồn servo yếu.
-- MQ3 chưa được hiệu chuẩn threshold và warm-up đúng thực tế.
+### START
 
-Về logic firmware, luồng `PASS_READY -> START -> RUNNING` hiện đã được bảo vệ tốt hơn và phù hợp hơn với yêu cầu interlock: kết quả PASS chỉ cấp quyền START, không tự mở khóa.
+Khi START hợp lệ từ `PASS_READY`, buzzer kêu một tiếng ngắn tương tự PASS.
 
+### FAIL
+
+Khi FAIL, buzzer cảnh báo theo chu kỳ.
+
+### Retest
+
+Khi đến hạn retest, state vào `RETEST_REQUIRED` và buzzer kêu nhắc theo chu kỳ. Pha buzzer được tính từ thời điểm vào `RETEST_REQUIRED`, nên sẽ có tiếng nhắc ngay khi state này bắt đầu.
+
+## 13. Trạng Thái Cuối Cùng Của Demo
+
+Thông số hiện tại:
+
+| Nhóm | Giá trị |
+|---|---:|
+| Preheat demo | 10 giây |
+| Sampling | 2 giây |
+| Retest demo | 60 giây |
+| Retest production | 30 phút |
+| Retest grace demo | 15 giây |
+| Button polarity | active-LOW |
+| START GPIO | GPIO16/RX2 |
+| Servo GPIO | GPIO15 |
+| Threshold demo | ADC 2000 |
+
+Luồng demo chuẩn:
+
+```text
+PREHEAT
+-> STANDBY_LOCKED
+-> TEST
+-> SAMPLING
+-> PASS_READY
+-> START
+-> RUNNING
+-> sau 60 giây
+-> RETEST_REQUIRED
+-> TEST
+-> RETEST_SAMPLING
+-> RUNNING hoặc FAIL_LOCKED
+```
+
+## 14. Bài Học Kỹ Thuật
+
+Các lỗi đã gặp không nằm ở thuật toán ADC mà chủ yếu nằm ở ranh giới giữa firmware và phần cứng:
+
+- Tên chân trên Wokwi có thể khác tên GPIO trong code.
+- Nút active-HIGH và active-LOW nếu cấu hình sai sẽ gây hành vi rất khó đoán.
+- Event interrupt cũ có thể ảnh hưởng state mới nếu không clear đúng thời điểm.
+- Servo cần nguồn riêng đủ dòng; nếu không, ESP32 có thể reset khi servo chạy.
+- Log quá nhiều làm việc debug khó hơn, đặc biệt trong demo.
+
+## 15. Trạng Thái Sẵn Sàng
+
+Firmware hiện đã phù hợp để demo:
+
+- Có retest định kỳ 1 phút trong demo.
+- Có buzzer nhắc retest.
+- Có tiếng beep khi PASS và khi START hợp lệ.
+- Có bảo vệ START sau PASS.
+- Có guard chống START double event.
+- Có sampling 2 giây.
+- Có tài liệu README và roadmap đã đồng bộ với code hiện tại.

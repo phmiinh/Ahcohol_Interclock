@@ -66,7 +66,7 @@ constexpr uint32_t kSampleTotalMs = 2000UL;
 constexpr uint32_t kSampleIntervalMs = kSampleCount > 1 ? (kSampleTotalMs / (kSampleCount - 1)) : kSampleTotalMs;
 // Rolling retest target is 30 minutes in production. Demo mode shortens it so the flow is testable in Wokwi.
 constexpr uint32_t kRetestProductionMs = 30UL * 60UL * 1000UL;
-constexpr uint32_t kRetestDemoMs = 30UL * 1000UL;
+constexpr uint32_t kRetestDemoMs = 60UL * 1000UL;
 constexpr uint32_t kRetestIntervalMs = features::kDemoMode ? kRetestDemoMs : kRetestProductionMs;
 // Grace window before safe-lock if the operator ignores a due retest.
 constexpr uint32_t kRetestGraceMs = features::kDemoMode ? 15UL * 1000UL : 5UL * 60UL * 1000UL;

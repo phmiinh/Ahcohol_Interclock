@@ -1,306 +1,335 @@
-# Roadmap Vận Hành Dự Án
+# Roadmap Triển Khai Và Kiểm Thử
 
-File này tập trung vào cách build, cách demo và cách nối firmware với dashboard. `README.md` trả lời câu hỏi dự án là gì; file này trả lời câu hỏi chạy như thế nào.
+## 1. Mục Tiêu Tài Liệu
 
-Source of truth cho firmware là `src/*`. Thư mục `.pio/` chỉ là output build local của PlatformIO.
+Tài liệu này mô tả quy trình thực hiện dự án Alcohol Interlock System theo góc nhìn kỹ thuật: bài toán, yêu cầu, thiết kế, triển khai, kiểm thử và các lưu ý khi chuyển từ Wokwi sang phần cứng thật.
 
-## 1. Khi nào dùng đường chạy nào
+`README.md` dùng để nắm tổng quan dự án. File này dùng để hiểu cách dự án được xây dựng và cách kiểm chứng từng phần.
 
-| Nhu cầu | Cách chạy phù hợp |
-|---|---|
-| Demo logic nhúng trên mô phỏng | `PlatformIO + Wokwi local` |
-| Demo telemetry realtime với thiết bị thật | `ESP32 thật + USB serial + dashboard` |
-| Test riêng UI dashboard khi chưa có board | `npm run mock` |
+## 2. Bài Toán Và Use Case
 
-## 2. Yêu cầu môi trường
+Bài toán đặt ra: trước khi cho phép mở khóa mô hình khởi động xe, hệ thống yêu cầu người dùng thực hiện kiểm tra nồng độ cồn. Nếu kết quả an toàn, hệ thống cho phép START. Nếu kết quả vượt ngưỡng, hệ thống khóa và cảnh báo. Sau khi xe đã ở trạng thái chạy, hệ thống tiếp tục yêu cầu kiểm tra lại theo chu kỳ để mô phỏng yêu cầu retest của alcohol interlock thực tế.
 
-Bạn cần có:
+Các use case chính:
 
-- `VS Code`
-- extension `PlatformIO IDE`
-- extension `Wokwi for VS Code`
-- internet và license Wokwi cho VS Code
-- `Node.js` nếu muốn chạy dashboard
+| Mã | Use case | Kết quả mong đợi |
+|---|---|---|
+| UC01 | Khởi động và preheat | Hệ thống vào `STANDBY_LOCKED` sau preheat |
+| UC02 | Nhấn TEST để kiểm tra | Hệ thống lấy mẫu ADC và trả PASS/FAIL |
+| UC03 | PASS rồi START | Servo mở, state vào `RUNNING` |
+| UC04 | FAIL rồi không cho START | Servo giữ khóa, buzzer cảnh báo |
+| UC05 | Retest khi đang RUNNING | Đến hạn thì yêu cầu TEST lại |
+| UC06 | Retest timeout | Hệ thống vào `ERROR_LOCKED` |
+| UC07 | Lỗi cảm biến/ngoại vi | Hệ thống vào safe state |
 
-Toolchain hiện tại của repo:
+## 3. Yêu Cầu Chức Năng
 
-- board: `esp32dev`
-- framework: `arduino`
-- platform: `espressif32@6.3.2`
-- serial monitor: `115200`
+| Mã | Yêu cầu | Hiện trạng |
+|---|---|---|
+| FR01 | Khởi tạo GPIO, ADC, OLED, servo, buzzer | Đã có trong `IoDevices::begin()` |
+| FR02 | Preheat trước khi đo | `PREHEAT` 10 giây demo |
+| FR03 | Nhận TEST bằng interrupt/debounce | Đã có |
+| FR04 | Lấy nhiều mẫu ADC | 20 mẫu trong khoảng 2 giây |
+| FR05 | Tính trung bình và so threshold | `sampledAdc < kAlcoholAdc` là PASS |
+| FR06 | Chỉ cho START sau PASS | Chỉ state `PASS_READY` mới nhận START |
+| FR07 | Điều khiển servo khóa/mở | `GPIO15`, góc 0/90 |
+| FR08 | OLED/LED/buzzer phản ánh trạng thái | Đã có |
+| FR09 | Retest định kỳ khi RUNNING | 60 giây demo, 30 phút production |
+| FR10 | Fault handling | OLED init fail, sensor timeout, retest timeout |
+| FR11 | Log phục vụ kiểm thử | Serial log gọn |
 
-## 3. Cấu trúc quan trọng sau refactor
+## 4. Yêu Cầu Phi Chức Năng
 
-- `src/main.cpp`: entry point
-- `src/config.h`: nơi sửa pin, threshold, polarity nút
-- `src/state_machine.*`: luồng nghiệp vụ chính
-- `src/io_devices.*`: giao tiếp phần cứng
-- `src/ui_oled.*`: màn hình OLED
-- `src/telemetry.*`: log và `AI_JSON`
-- `diagram.json`: sơ đồ mô phỏng
-- `wokwi.toml`: map firmware local cho Wokwi
-- `dashboard/server.js`: backend đọc serial và phát realtime
-- `dashboard/public/*`: frontend dashboard
+| Nhóm | Yêu cầu | Phân tích sơ bộ |
+|---|---|---|
+| An toàn | Mặc định khóa, lỗi thì khóa | Servo luôn về lock khi fault |
+| Thời gian đáp ứng | Nút bấm phản hồi nhanh | Debounce 60 ms, interrupt flag |
+| Ổn định tín hiệu | Không quyết định từ một mẫu | Trung bình 20 mẫu, có stddev |
+| Dễ demo | Timing không quá dài | Sampling 2 giây, retest demo 60 giây |
+| Dễ bảo trì | Code chia module | `config`, `io_devices`, `state_machine`, `telemetry`, `ui_oled` |
+| Dễ kiểm thử | Có log và metric | `test_to_result_ms`, `start_to_unlock_ms`, retest metrics |
+| Tài nguyên | Phù hợp ESP32 | RAM/Flash dưới giới hạn board |
 
-## 4. Build firmware local
+## 5. Kiến Trúc Hệ Thống
 
-Chạy ở thư mục project:
+Luồng tổng thể:
+
+```text
+Người dùng
+  -> TEST/START
+  -> ESP32
+  -> FSM + ADC sampling
+  -> OLED/LED/Buzzer/Servo
+```
+
+Các tầng phần mềm:
+
+```text
+main.cpp
+  -> AlcoholInterlockController
+    -> IoDevices
+    -> OledUi
+    -> Telemetry
+    -> Config/AppTypes
+```
+
+Lý do chia module:
+
+- `config.h`: gom toàn bộ pin, threshold, timing và feature flag.
+- `io_devices.*`: cô lập thao tác phần cứng.
+- `state_machine.*`: giữ business logic tập trung.
+- `ui_oled.*`: render màn hình độc lập với FSM.
+- `telemetry.*`: log và dashboard protocol không làm rối logic chính.
+
+## 6. Thiết Kế Phần Cứng
+
+Linh kiện dùng trong demo:
+
+- ESP32 DevKit.
+- OLED SSD1306 I2C.
+- Servo SG90 hoặc tương đương.
+- Buzzer.
+- LED đỏ, xanh, vàng.
+- Nút TEST và START.
+- Potentiometer trong Wokwi để giả lập MQ3.
+
+Pin mapping:
+
+| Chức năng | GPIO |
+|---|---:|
+| ADC/MQ3 giả lập | `34` |
+| Servo | `15` |
+| Buzzer | `13` |
+| LED đỏ | `25` |
+| LED xanh | `26` |
+| LED vàng | `27` |
+| TEST | `14` |
+| START | `16` |
+| OLED SDA | `21` |
+| OLED SCL | `22` |
+
+Lưu ý quan trọng:
+
+- START trên Wokwi DevKit được nối vào `RX2`, tương ứng GPIO16.
+- Firmware mặc định active-LOW cho TEST/START.
+- Nút active-LOW cần pullup.
+- Servo cần nguồn đủ dòng và chung GND với ESP32.
+- MQ3 thật cần hiệu chuẩn, không dùng threshold demo làm giá trị cuối.
+
+## 7. Thiết Kế Phần Mềm
+
+FSM hiện tại:
+
+```text
+PREHEAT
+STANDBY_LOCKED
+SAMPLING
+PASS_READY
+FAIL_LOCKED
+RUNNING
+RETEST_REQUIRED
+RETEST_SAMPLING
+ERROR_LOCKED
+```
+
+Các nguyên tắc chính:
+
+- Không dùng `delay()` cho sampling hoặc buzzer.
+- Dùng `millis()` để lập lịch.
+- Mỗi vòng update chỉ lấy tối đa một mẫu ADC.
+- ISR của nút chỉ set flag, không xử lý nghiệp vụ trong interrupt.
+- Mọi lỗi nghiêm trọng đều đi về safe state.
+
+## 8. Quy Trình Build Và Mô Phỏng
+
+### 8.1. Build Firmware
 
 ```powershell
 pio run
 ```
 
-Sau khi build thành công, Wokwi local sẽ dùng:
+Kết quả cần có:
 
-- `.pio/build/esp32dev/firmware.bin`
-- `.pio/build/esp32dev/firmware.elf`
-
-Nếu cần clean:
-
-```powershell
-pio run -t clean
-pio run
+```text
+.pio/build/esp32dev/firmware.bin
+.pio/build/esp32dev/firmware.elf
 ```
 
-## 5. Chạy Wokwi local trong VS Code
+### 8.2. Chạy Wokwi
 
-1. Build firmware bằng `pio run`
-2. Mở file `diagram.json`
-3. Nhấn `F1`
-4. Chạy lệnh `Wokwi: Start Simulator`
+1. Build firmware.
+2. Mở `diagram.json`.
+3. Chạy `Wokwi: Start Simulator`.
+4. Quan sát OLED, servo, LED, buzzer và Serial Monitor.
 
-Lưu ý:
-
-- Wokwi local chỉ nạp firmware đã build sẵn từ PlatformIO
-- Nếu đổi tên env trong `platformio.ini`, phải cập nhật lại `wokwi.toml`
-- `TEST` hiện có thêm `GPIO interrupt`; Wokwi ESP32 vẫn mô phỏng được hướng này
-
-## 6. Demo 3 flow chính
-
-### Flow 1: Boot / Preheat
-
-1. Start simulator
-2. Quan sát `OLED` hiển thị warm-up
-3. Quan sát `LED vàng` sáng
-4. Chờ hết `kPreheatMs`
-5. Hệ thống tự chuyển sang `STANDBY_LOCKED`
-
-### Flow 2: PASS rồi START
-
-1. Đưa `potentiometer` xuống mức thấp hơn threshold
-2. Nhấn `TEST`
-3. Quan sát:
-   - OLED vào `SAMPLING`
-   - Serial log tiến độ từng mẫu
-   - log `average ADC`, `stddev`, `threshold`, `PASS`
-   - metric `test_to_result_ms`
-4. Hệ thống sang `PASS_READY`
-5. Nhấn `START`
-6. Servo mở khóa, state sang `RUNNING`
-7. Quan sát thêm metric:
-   - `pass_ready_to_unlock_ms`
-   - `start_to_unlock_ms`
-
-### Flow 3: FAIL rồi không cho START
-
-1. Đưa `potentiometer` lên cao hơn threshold
-2. Nhấn `TEST`
-3. Quan sát:
-   - OLED vào `SAMPLING`
-   - Serial log `average ADC`, `stddev`, `threshold`, `FAIL`
-   - `consecutiveFailCount` tăng
-4. Hệ thống sang `FAIL_LOCKED`
-5. `LED đỏ` sáng, `buzzer` cảnh báo
-6. Nhấn `START` sẽ không mở khóa
-
-### Flow phụ để demo nhanh
-
-Khi đang ở `RUNNING`, nhấn `START` lần nữa để quay về `STANDBY_LOCKED`.
-
-## 7. Chạy dashboard với ESP32 thật
-
-Dashboard chỉ nên dùng khi có `ESP32 thật` cắm qua USB serial.
-
-### Bước 1: cài dependency
+### 8.3. Chạy Dashboard
 
 ```powershell
 npm install
-```
-
-### Bước 2: tìm cổng serial
-
-```powershell
-npm run ports
-```
-
-### Bước 3: chạy server
-
-Tự dò cổng:
-
-```powershell
 npm run start
 ```
 
-Hoặc chỉ định cổng:
-
-```powershell
-node dashboard/server.js --serial COM5
-```
-
-### Bước 4: mở dashboard
-
-Mở trình duyệt tại:
-
-```text
-http://localhost:3030
-```
-
-Dashboard sẽ hiển thị:
-
-- connection status
-- state machine
-- live ADC
-- sampled ADC
-- threshold
-- servo angle
-- vehicle locked / unlocked
-- buzzer status
-- preheat countdown
-- event history
-- raw serial lines
-
-## 8. Chạy dashboard ở mock mode
-
-Khi chưa có board thật:
+Hoặc chạy mock:
 
 ```powershell
 npm run mock
 ```
 
-Mock mode dùng để test UI và notification, không thay thế demo firmware.
+Dashboard chỉ có ý nghĩa khi firmware bật `kEnableDashboardProtocol = true`.
 
-## 9. Wiring và lưu ý phần cứng
+## 9. Quy Trình Kiểm Thử
 
-Mapping hiện tại:
+### 9.1. Test Boot/Preheat
 
-| Chức năng | GPIO |
-|---|---|
-| MQ3 analog / potentiometer | `GPIO34` |
-| Servo SG90 | `GPIO15` |
-| Buzzer | `GPIO13` |
-| LED đỏ | `GPIO25` |
-| LED xanh | `GPIO26` |
-| LED vàng | `GPIO27` |
-| TEST | `GPIO14` |
-| START | `GPIO16` |
-| OLED SDA | `GPIO21` |
-| OLED SCL | `GPIO22` |
+Mục tiêu:
 
-Lưu ý quan trọng:
+- Kiểm tra hệ thống khởi động đúng.
+- Servo về lock.
+- OLED hiển thị preheat.
+- Sau 10 giây vào `STANDBY_LOCKED`.
 
-- `START` đã chốt là `GPIO16`, không dùng `GPIO12`
-- Wokwi dùng `potentiometer` thay `MQ3`
-- Wokwi đang dùng `pushbutton thường + điện trở kéo lên 10k` để mô phỏng tín hiệu `OUT active-LOW`
-- Phần cứng thật có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`
-- Firmware bật bias nội cho input button để tránh idle bị float:
-  - `pulldown` khi `active HIGH`
-  - `pullup` khi `active LOW`
-- `TEST` dùng `interrupt` để set flag sớm, nhưng debounce vẫn xử lý bằng software
-- Buzzer dùng `LEDC hardware timer` để phát beep 2 kHz ổn định hơn
-- Nếu module của bạn xuất `HIGH` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h` sang `true`
-- Nếu dùng `MQ3` thật và module cho analog `0-5V`, phải chia áp trước khi đưa vào `GPIO34`
-- Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
+Log mong đợi:
 
-## 10. Fault handling hiện tại
+```text
+STATE: Transition -> PREHEAT
+STATE: Transition -> STANDBY_LOCKED
+```
 
-Sau refactor, hệ thống có fault handling tối thiểu nhưng thực tế hơn:
+### 9.2. Test PASS Rồi START
 
-- `OLED init fail` -> vào `ERROR_LOCKED`, giữ safe state, log lỗi qua Serial
-- `ADC bị ghim gần 0 hoặc 4095 quá lâu` -> phát `sensor warning`, log cảnh báo và gửi telemetry, nhưng không khóa chết hệ thống chỉ vì một lần đọc bất thường
-- `toàn bộ phiên sampling đều stuck near rail` -> vào hard fault `SENSOR_TIMEOUT`, vì đây là lỗi sensor/wiring trong đúng thời điểm ra quyết định PASS/FAIL
-- Safe state luôn là:
-  - servo khóa
-  - không cho START
-  - telemetry vẫn giữ được nếu Serial còn hoạt động
+Thao tác:
 
-## 11. Metric nên dùng trong báo cáo
+1. Đưa ADC xuống dưới threshold.
+2. Nhấn TEST.
+3. Chờ sampling khoảng 2 giây.
+4. Quan sát `PASS_READY`.
+5. Nhấn START.
 
-Serial log và `AI_JSON` hiện đã có sẵn các chỉ số sau:
+Log mong đợi:
 
-- `test_to_result_ms`: thời gian từ lúc nhấn `TEST` đến khi có kết quả PASS/FAIL
-- `pass_ready_to_unlock_ms`: thời gian chờ trong `PASS_READY` trước khi người dùng nhấn `START`
-- `start_to_unlock_ms`: độ trễ từ lúc nhấn `START` đến khi servo mở khóa
-- `sampleStdDev`: độ lệch chuẩn đơn giản của các mẫu ADC trong một phiên đo
-- `consecutiveFailCount`: số lần FAIL liên tiếp trước khi PASS
-- `retestRemainingMs`: thoi gian con lai truoc khi yeu cau rolling retest khi dang `RUNNING`
-- `retestDueToTestMs`: thoi gian tu luc he thong yeu cau retest den luc nguoi dung nhan `TEST`
-- `retestToResultMs`: thoi gian tu luc nhan `TEST` trong retest den khi co ket qua PASS/FAIL
+```text
+RESULT: ... result=PASS
+STATE: Transition -> PASS_READY
+ACTION: START accepted. Vehicle unlocked
+STATE: Transition -> RUNNING
+```
 
-## 12. Checklist test trước khi demo
+### 9.3. Test FAIL Rồi Không Cho START
 
-- `pio run` build thành công
-- Wokwi local start được từ `diagram.json`
-- `PREHEAT -> STANDBY_LOCKED` chuyển đúng
-- Nhánh `PASS -> START -> RUNNING` chạy đúng
-- Nhánh `FAIL -> START không có hiệu lực` chạy đúng
-- Serial log có:
-  - tiến độ lấy mẫu
-  - average ADC
-  - stddev
-  - threshold
-  - PASS/FAIL
-  - các metric latency
-- Dashboard vẫn nhận được `AI_JSON` nếu test với board thật hoặc mock mode
+Thao tác:
 
-## Update: Running Periodic Retest
+1. Đưa ADC lên trên threshold.
+2. Nhấn TEST.
+3. Chờ sampling.
+4. Nhấn START để xác nhận không mở khóa.
 
-Tinh nang moi: sau khi `PASS -> START -> RUNNING`, firmware bat dau dem nguoc retest. Production target la `30 phut`; trong `kDemoMode`, gia tri nay la `30 giay` de ban demo nhanh tren Wokwi.
+Kết quả:
 
-Khi het han, state chuyen sang `RETEST_REQUIRED`. He thong van giu servo mo khoa, bat LED xanh + vang va beep ngan de nhac. Nhan `TEST` se vao `RETEST_SAMPLING` trong khi xe van o trang thai running. PASS thi quay ve `RUNNING`; FAIL thi chuyen `FAIL_LOCKED`; neu het grace window ma khong test thi vao `ERROR_LOCKED` voi fault `RETEST_TIMEOUT`.
+- State giữ ở `FAIL_LOCKED`.
+- Servo không mở.
+- Buzzer cảnh báo.
 
-Checklist log can lay them cho bao cao:
-- `STATE: Transition -> RETEST_REQUIRED`
-- `STATE: Transition -> RETEST_SAMPLING`
-- `AI_JSON` co `retestRequired=true`
-- `METRIC: retest_due_to_test_ms=... | retest_to_result_ms=...`
-- retest PASS: `sample_result` success va quay lai `RUNNING`
-- retest FAIL: `sample_result` warning va chuyen `FAIL_LOCKED`
-- retest timeout: `FAULT: RETEST_TIMEOUT`
+### 9.4. Test Retest Định Kỳ
 
-## 13. Troubleshooting nhanh
+Thao tác:
 
-### Wokwi không chạy
+1. Chạy flow PASS rồi START.
+2. Hệ thống vào `RUNNING`.
+3. Chờ 60 giây trong demo.
+4. Quan sát state `RETEST_REQUIRED`.
+5. Buzzer phải kêu nhắc retest.
+6. Nhấn TEST.
 
-Kiểm tra:
+Kết quả:
 
-- đã cài `Wokwi for VS Code`
-- đã build ra `firmware.bin` và `firmware.elf`
-- `wokwi.toml` còn trỏ đúng env `esp32dev`
-- license Wokwi còn hiệu lực
+- Retest PASS: quay lại `RUNNING`.
+- Retest FAIL: vào `FAIL_LOCKED`.
+- Không nhấn TEST trong grace window: vào `ERROR_LOCKED`.
 
-### Dashboard không có dữ liệu
+### 9.5. Test START Trên Phần Cứng Thật
 
-Kiểm tra:
+Với cấu hình active-LOW:
 
-- đang dùng `ESP32 thật`, không phải cửa sổ Wokwi
-- baud rate là `115200`
-- chọn đúng `COM` port
-- firmware đã nạp bản mới nhất
+| Trạng thái | Điện áp mong đợi tại D16/GPIO16 |
+|---|---:|
+| Không nhấn START | khoảng `3.3V` |
+| Nhấn START | khoảng `0V` |
 
-### Nút bấm không ăn
+Nếu đo ngược lại, đổi `kActiveHigh = true`.
 
-Kiểm tra:
+## 10. Phân Tích Sơ Bộ Về Timing
 
-- `TEST -> GPIO14`
-- `START -> GPIO16`
-- module nút là `active HIGH` hay `active LOW`
-- wiring trong Wokwi đang mô phỏng `active-LOW` bằng pullup 10k
+| Tác vụ | Timing hiện tại | Nhận xét |
+|---|---:|---|
+| Preheat demo | 10 giây | Đủ nhìn rõ khi demo |
+| Sampling | 2 giây | Cân bằng giữa tốc độ và ổn định mẫu |
+| Debounce nút | 60 ms | Phù hợp nút cơ |
+| Guard START sau RUNNING | 800 ms | Chống một lần bấm bị tính hai lần |
+| Retest demo | 60 giây | Dễ quan sát mà không quá gấp |
+| Retest production | 30 phút | Gần yêu cầu thực tế hơn |
+| Retest grace demo | 15 giây | Đủ để thấy timeout |
 
-### Muốn chỉnh threshold hoặc thời gian demo
+## 11. Phân Tích Sơ Bộ Về Rủi Ro
 
-Sửa trong `src/config.h`, sau đó build lại bằng `pio run`.
+### 11.1. Nút Bấm
 
-Lưu ý:
+Rủi ro:
 
-- các giá trị demo hiện tại phục vụ Wokwi, giúp log dễ nhìn và dễ trình bày
-- nếu chuyển sang `MQ3` thật thì phải calibration lại threshold, warm-up và cách diễn giải giá trị ADC
+- Sai polarity active-HIGH/active-LOW.
+- Dây input bị float.
+- Module nút không chung GND với ESP32.
+
+Giải pháp:
+
+- Đo điện áp thực tế ở chân GPIO.
+- Giữ `kActiveHigh = false` nếu idle HIGH, nhấn LOW.
+- Đổi `kActiveHigh = true` nếu idle LOW, nhấn HIGH.
+
+### 11.2. Servo
+
+Rủi ro:
+
+- Servo kéo dòng làm ESP32 reset.
+- Servo không có GND chung.
+- Cắm nhầm chân signal.
+
+Giải pháp:
+
+- Dùng nguồn 5V riêng đủ dòng.
+- Nối chung GND.
+- Signal servo đúng GPIO15.
+
+### 11.3. Cảm Biến MQ3 Thật
+
+Rủi ro:
+
+- Warm-up thật lâu hơn demo.
+- Threshold demo không đúng thực tế.
+- Analog output vượt mức an toàn ESP32.
+
+Giải pháp:
+
+- Hiệu chuẩn lại `kAlcoholAdc`.
+- Đo `sampleStdDev`.
+- Bảo đảm điện áp vào GPIO34 trong miền an toàn.
+
+## 12. Tiêu Chí Hoàn Thành Demo
+
+Repo được coi là sẵn sàng demo khi:
+
+- `pio run` build thành công.
+- Wokwi chạy được từ `diagram.json`.
+- PASS rồi START mở servo ổn định.
+- FAIL không mở servo.
+- Retest sau 60 giây có buzzer nhắc.
+- Retest PASS/FAIL hoạt động đúng.
+- Không retest thì timeout vào `ERROR_LOCKED`.
+- Serial log đủ gọn để copy vào báo cáo.
+
+## 13. Việc Cần Làm Nếu Muốn Nâng Cấp
+
+- Hiệu chuẩn MQ3 thật bằng dữ liệu đo thực nghiệm.
+- Tách cấu hình demo và production rõ hơn bằng build flag.
+- Bật dashboard protocol khi dùng ESP32 thật.
+- Bổ sung test log thực tế vào báo cáo.
+- Đóng gói prototype phần cứng với nguồn servo ổn định.
