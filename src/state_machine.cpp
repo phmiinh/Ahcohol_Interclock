@@ -143,6 +143,7 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
 
   if (state_ == SystemState::PassReady) {
     passReadyEnteredAtMs_ = transitionStartedAtMs;
+    io_.clearButtonEvent(ButtonId::Start, transitionStartedAtMs);
     startReleasedAfterPassReady_ = !io_.buttonActive(ButtonId::Start);
   } else if (state_ != SystemState::Running) {
     passReadyEnteredAtMs_ = 0;

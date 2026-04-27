@@ -84,11 +84,10 @@ constexpr uint32_t kDashboardTelemetryMs = 500UL;
 }  // namespace timing
 
 namespace buttons {
-// Firmware logic targets an active-HIGH button model.
-// Wokwi uses plain pushbuttons plus 10k pulldown resistors to emulate the OUT pin of an active-HIGH button module.
-// Real hardware may use a 3-pin module or a discrete pushbutton with an equivalent bias network.
+// Real 3-pin button modules commonly idle HIGH and pull the output LOW when pressed.
+// Keep Wokwi and real hardware aligned to this active-LOW model.
 constexpr bool kUse3PinModules = true;
-constexpr bool kActiveHigh = true;
+constexpr bool kActiveHigh = false;
 constexpr bool kUseInternalBias = true;
 // Keep the line at a stable idle level even if the external button module output floats.
 constexpr uint8_t kPinMode = kUseInternalBias ? (kActiveHigh ? INPUT_PULLDOWN : INPUT_PULLUP) : INPUT;

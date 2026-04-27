@@ -104,16 +104,16 @@ npm run mock
 ## Ghi chú prototype
 
 - Wokwi không dùng `MQ3` thật, mà dùng `potentiometer` để mô phỏng mức ADC.
-- Trong Wokwi, `TEST` và `START` đang được mô phỏng bằng `pushbutton thường + điện trở kéo xuống 10k` để giả lập hành vi `OUT active-HIGH` của module nút 3 chân.
-- Trên phần cứng thật, bạn có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`; firmware vẫn đang coi hai input này là `active HIGH`.
+- Trong Wokwi, `TEST` và `START` đang được mô phỏng bằng `pushbutton thường + điện trở kéo lên 10k` để giả lập hành vi `OUT active-LOW` của module nút 3 chân.
+- Trên phần cứng thật, firmware mặc định coi hai input này là `active LOW`: idle `HIGH`, nhấn `LOW`.
 - `kDemoMode`, `kPreheatMs`, `kSampleCount` và `kAlcoholAdc` là tham số demo cho Wokwi và cho phần báo cáo, không phải calibration cuối cho `MQ3` thật.
 - `TEST` đang dùng interrupt chỉ để set flag; debounce và logic nghiệp vụ vẫn chạy ở `loop()`, nên an toàn cho demo và đúng tinh thần embedded.
 - Dashboard tối ưu cho `ESP32 thật qua USB serial`; dashboard không đọc trực tiếp từ cửa sổ Wokwi.
-- Nếu module nút của bạn là `active LOW`, đổi `config::buttons::kActiveHigh` trong [src/config.h](src/config.h).
+- Nếu module nút của bạn là `active HIGH`, đổi `config::buttons::kActiveHigh` trong [src/config.h](src/config.h) sang `true`.
 
 ## Known Hardware Assumptions
 
-- Firmware mặc định cho mô hình input `active HIGH`
+- Firmware mặc định cho mô hình input `active LOW`
 - Bias nội của ESP32 đang bật mặc định để giữ idle ổn định:
   - `pulldown` khi `active HIGH`
   - `pullup` khi `active LOW`

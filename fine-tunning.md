@@ -232,7 +232,7 @@ Phân tích:
 - Nguyên nhân có thể là:
   - START đang bị giữ từ trước.
   - START bị float.
-  - Module nút START active-LOW nhưng firmware cấu hình active-HIGH.
+  - Module nút START active-HIGH nhưng firmware cấu hình active-LOW, hoặc ngược lại.
   - Dây hoặc bias phần cứng làm GPIO16 luôn active.
   - Interrupt START còn pending khi chuyển state.
 
@@ -312,27 +312,27 @@ RETEST_TIMEOUT   -> ERROR_LOCKED
 Firmware hiện giả định:
 
 ```cpp
-kActiveHigh = true
+kActiveHigh = false
 ```
 
 Nghĩa là:
 
-- Idle: LOW.
-- Nhấn: HIGH.
-- Nên có pulldown ổn định.
-
-Nếu module nút thực tế của bạn là active-LOW:
-
 - Idle: HIGH.
 - Nhấn: LOW.
+- Nên có pullup ổn định.
+
+Nếu module nút thực tế của bạn là active-HIGH:
+
+- Idle: LOW.
+- Nhấn: HIGH.
 
 Khi đó phải đổi:
 
 ```cpp
-kActiveHigh = false
+kActiveHigh = true
 ```
 
-Nếu không đổi, firmware có thể hiểu nhầm rằng START đang được nhấn ngay khi vừa PASS.
+Nếu cấu hình sai polarity, firmware có thể không nhận TEST/START hoặc hiểu nhầm START đang được nhấn ngay khi vừa PASS.
 
 ### 5.2. Bias Cho START Và TEST
 

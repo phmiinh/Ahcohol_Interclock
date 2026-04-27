@@ -71,7 +71,8 @@ bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
   ButtonTracker& tracker = buttonFor(button);
   const bool reading = digitalRead(tracker.pin);
 
-  if (consumeButtonIrq(button) && (nowMs - tracker.lastPressEventMs) > config::timing::kButtonDebounceMs) {
+  if (consumeButtonIrq(button) && reading == tracker.activeLevel &&
+      (nowMs - tracker.lastPressEventMs) > config::timing::kButtonDebounceMs) {
     tracker.lastPressEventMs = nowMs;
     tracker.lastStable = tracker.activeLevel;
     tracker.lastRead = reading;
@@ -99,6 +100,16 @@ bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
 bool IoDevices::buttonActive(ButtonId button) {
   const ButtonTracker& tracker = buttonFor(button);
   return digitalRead(tracker.pin) == tracker.activeLevel;
+}
+
+void IoDevices::clearButtonEvent(ButtonId button, uint32_t nowMs) {
+  consumeButtonIrq(button);
+  ButtonTracker& tracker = buttonFor(button);
+  const bool reading = digitalRead(tracker.pin);
+  tracker.lastStable = reading;
+  tracker.lastRead = reading;
+  tracker.lastChangeMs = nowMs;
+  tracker.lastPressEventMs = nowMs;
 }
 
 uint16_t IoDevices::readAlcoholRaw() {

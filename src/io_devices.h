@@ -23,6 +23,7 @@ class IoDevices {
   Adafruit_SSD1306& display();
   bool buttonPressed(ButtonId button, uint32_t nowMs);
   bool buttonActive(ButtonId button);
+  void clearButtonEvent(ButtonId button, uint32_t nowMs);
   uint16_t readAlcoholRaw();
   void setBuzzer(bool on);
   void setIndicators(SystemState state);

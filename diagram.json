@@ -145,15 +145,15 @@
     [ "rYellow:2", "esp:D27", "yellow", [ "v0" ] ],
     [ "ledYellow:C", "esp:GND.1", "black", [ "v0" ] ],
 
-    [ "btnTest:1.l", "esp:3V3", "red", [ "v0" ] ],
+    [ "btnTest:1.l", "esp:GND.1", "black", [ "v0" ] ],
     [ "btnTest:2.l", "esp:D14", "green", [ "v0" ] ],
     [ "rBtnTest:1", "esp:D14", "green", [ "v0" ] ],
-    [ "rBtnTest:2", "esp:GND.1", "black", [ "v0" ] ],
+    [ "rBtnTest:2", "esp:3V3", "red", [ "v0" ] ],
 
-    [ "btnStart:1.l", "esp:3V3", "red", [ "v0" ] ],
+    [ "btnStart:1.l", "esp:GND.1", "black", [ "v0" ] ],
     [ "btnStart:2.l", "esp:RX2", "red", [ "v0" ] ],
     [ "rBtnStart:1", "esp:RX2", "red", [ "v0" ] ],
-    [ "rBtnStart:2", "esp:GND.1", "black", [ "v0" ] ],
+    [ "rBtnStart:2", "esp:3V3", "red", [ "v0" ] ],
 
     [ "mq3sim:GND", "esp:GND.2", "black", [ "v0" ] ],
     [ "mq3sim:VCC", "esp:3V3", "red", [ "v0" ] ],

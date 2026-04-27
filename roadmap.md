@@ -200,14 +200,14 @@ Lưu ý quan trọng:
 
 - `START` đã chốt là `GPIO16`, không dùng `GPIO12`
 - Wokwi dùng `potentiometer` thay `MQ3`
-- Wokwi đang dùng `pushbutton thường + điện trở kéo xuống 10k` để mô phỏng tín hiệu `OUT active-HIGH`
+- Wokwi đang dùng `pushbutton thường + điện trở kéo lên 10k` để mô phỏng tín hiệu `OUT active-LOW`
 - Phần cứng thật có thể dùng `module 3 chân` hoặc `nút rời + bias tương đương`
 - Firmware bật bias nội cho input button để tránh idle bị float:
   - `pulldown` khi `active HIGH`
   - `pullup` khi `active LOW`
 - `TEST` dùng `interrupt` để set flag sớm, nhưng debounce vẫn xử lý bằng software
 - Buzzer dùng `LEDC hardware timer` để phát beep 2 kHz ổn định hơn
-- Nếu module của bạn xuất `LOW` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h`
+- Nếu module của bạn xuất `HIGH` khi nhấn, đổi `config::buttons::kActiveHigh` trong `src/config.h` sang `true`
 - Nếu dùng `MQ3` thật và module cho analog `0-5V`, phải chia áp trước khi đưa vào `GPIO34`
 - Servo nên dùng nguồn đủ dòng và chung `GND` với ESP32
 
@@ -294,7 +294,7 @@ Kiểm tra:
 - `TEST -> GPIO14`
 - `START -> GPIO16`
 - module nút là `active HIGH` hay `active LOW`
-- wiring trong Wokwi đang mô phỏng `active-HIGH` bằng pulldown 10k
+- wiring trong Wokwi đang mô phỏng `active-LOW` bằng pullup 10k
 
 ### Muốn chỉnh threshold hoặc thời gian demo
 
