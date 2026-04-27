@@ -96,6 +96,11 @@ bool IoDevices::buttonPressed(ButtonId button, uint32_t nowMs) {
   return false;
 }
 
+bool IoDevices::buttonActive(ButtonId button) {
+  const ButtonTracker& tracker = buttonFor(button);
+  return digitalRead(tracker.pin) == tracker.activeLevel;
+}
+
 uint16_t IoDevices::readAlcoholRaw() {
   const int value = analogRead(config::pins::kMq3);
   const int clamped = constrain(value, config::thresholds::kAdcMin, config::thresholds::kAdcMax);

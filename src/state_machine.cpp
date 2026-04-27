@@ -73,7 +73,11 @@ void AlcoholInterlockController::update() {
       break;
 
     case SystemState::PassReady:
-      if (startPressed) {
+      if (!io_.buttonActive(ButtonId::Start)) {
+        startReleasedAfterPassReady_ = true;
+      }
+
+      if (startPressed && startReleasedAfterPassReady_) {
         const uint32_t startPressedAtMs = nowMs;
         lastPassReadyToUnlockMs_ = passReadyEnteredAtMs_ > 0 ? (startPressedAtMs - passReadyEnteredAtMs_) : 0;
         telemetry_.logAction("START accepted. Vehicle unlocked");
@@ -139,8 +143,10 @@ void AlcoholInterlockController::transitionTo(SystemState newState) {
 
   if (state_ == SystemState::PassReady) {
     passReadyEnteredAtMs_ = transitionStartedAtMs;
+    startReleasedAfterPassReady_ = !io_.buttonActive(ButtonId::Start);
   } else if (state_ != SystemState::Running) {
     passReadyEnteredAtMs_ = 0;
+    startReleasedAfterPassReady_ = false;
   }
 
   if (state_ == SystemState::Running) {

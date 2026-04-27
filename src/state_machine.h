@@ -70,6 +70,7 @@ class AlcoholInterlockController {
   uint32_t lastRetestDueToTestMs_ = 0;
   uint32_t lastRetestToResultMs_ = 0;
   bool samplingWhileRunning_ = false;
+  bool startReleasedAfterPassReady_ = false;
   uint16_t lastAlcoholRaw_ = 0;
   uint16_t sampledAlcoholRaw_ = 0;
   float sampledStdDev_ = 0.0f;
