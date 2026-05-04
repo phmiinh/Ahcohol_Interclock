@@ -27,6 +27,6 @@ coverage/
 .env.*
 
 # Local study notes generated for oral exam preparation
-fine-tunning.md
 explain.md
 explain/
+
